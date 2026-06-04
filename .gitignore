@@ -1,0 +1,35 @@
+node_modules/
+dist/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Electron
+packages/desktop/out/
+packages/desktop/dist/
+
+# Expo / React Native
+packages/mobile/.expo/
+packages/mobile/node_modules/
+packages/mobile/ios/build/
+packages/mobile/android/build/
+packages/mobile/android/.gradle/
+packages/mobile/.metro-cache/
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Downloads / yt-dlp cache
+downloads/
+*.part
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

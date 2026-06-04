@@ -1,0 +1,37 @@
+appId: com.kara.app
+productName: Kara
+copyright: Copyright © 2024-2025 Kara Contributors
+
+directories:
+  buildResources: resources
+  output: dist/packages
+
+files:
+  - '!**/.eslintrc.js'
+  - '!**/*.map'
+  - '!**/tsconfig*.json'
+
+asarUnpack:
+  - resources/**
+
+mac:
+  category: public.app-category.music
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+publish:
+  provider: github
+  owner: 9ninee
+  repo: kara

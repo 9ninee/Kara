@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Kara",
+    "slug": "kara",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "kara",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kara.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Kara uses the microphone for karaoke singing.",
+        "NSCameraUsageDescription": "Kara uses the camera to scan QR codes to join a party session.",
+        "UIBackgroundModes": ["audio"]
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Kara to access your microphone."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
