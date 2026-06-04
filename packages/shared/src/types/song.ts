@@ -31,7 +31,7 @@ export interface CDGFrame {
   /** Timestamp in milliseconds at which this frame should be displayed */
   timeMs: number
   /** RGBA pixel data — always 288 × 192 pixels */
-  pixels: Uint8ClampedArray
+  pixels: Uint8ClampedArray<ArrayBuffer>
 }
 
 export interface CDGPalette {

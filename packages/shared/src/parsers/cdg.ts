@@ -31,7 +31,7 @@ const SECTORS_PER_SECOND = 300
 /** Decoded state at a point in time, ready to render */
 export interface CDGState {
   /** RGBA flat array, CDG_WIDTH × CDG_HEIGHT */
-  pixels: Uint8ClampedArray
+  pixels: Uint8ClampedArray<ArrayBuffer>
   timeMs: number
 }
 
@@ -192,7 +192,7 @@ export class CDGPlayer {
     }
   }
 
-  private render(): Uint8ClampedArray {
+  private render(): Uint8ClampedArray<ArrayBuffer> {
     const pixels = new Uint8ClampedArray(CDG_WIDTH * CDG_HEIGHT * 4)
     for (let i = 0; i < CDG_WIDTH * CDG_HEIGHT; i++) {
       const { r, g, b } = this.palette[this.colorIndex[i]]

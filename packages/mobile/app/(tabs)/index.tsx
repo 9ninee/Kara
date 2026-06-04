@@ -1,5 +1,6 @@
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Slider } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import Slider from '@react-native-community/slider'
 import { usePlayer } from '../../hooks/usePlayer'
 import LyricsDisplay from '../../components/LyricsDisplay'
 

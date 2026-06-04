@@ -57,7 +57,7 @@ export default function SettingsScreen() {
         </View>
       )}
 
-      <Text style={styles.sectionTitle} style={{ marginTop: 24 }}>About</Text>
+      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>About</Text>
       <View style={styles.card}>
         <Text style={styles.cardLabel}>Kara v0.1.0</Text>
         <Text style={styles.cardValue}>Open-source karaoke for macOS &amp; iOS</Text>
