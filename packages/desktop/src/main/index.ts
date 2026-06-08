@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, protocol, net, dialog } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { initDatabase } from './library/database'
@@ -7,6 +7,14 @@ import { registerAudioHandlers } from './audio/deviceManager'
 import { registerLibraryHandlers } from './library/database'
 import { registerProviderHandlers } from './providers/youtube'
 import { registerCastingHandlers } from './casting/chromecast'
+
+// Must be called before app.whenReady()
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'kara',
+    privileges: { standard: true, secure: true, bypassCSP: true, supportFetchAPI: true, stream: true },
+  },
+])
 
 let mainWindow: BrowserWindow | null = null
 
@@ -41,12 +49,22 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  // Serve local files via kara://local/<absolute-path>
+  protocol.handle('kara', (request) => {
+    const filePath = request.url.slice('kara://local'.length)
+    return net.fetch(`file://${filePath}`)
+  })
+
   await initDatabase()
 
   registerAudioHandlers(ipcMain)
   registerLibraryHandlers(ipcMain)
   registerProviderHandlers(ipcMain)
   registerCastingHandlers(ipcMain)
+
+  ipcMain.handle('dialog:open', (_e, options: Electron.OpenDialogOptions) => {
+    return dialog.showOpenDialog(mainWindow!, options)
+  })
 
   createWindow()
 

@@ -6,84 +6,89 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  ActivityIndicator,
-  Image,
 } from 'react-native'
+import * as DocumentPicker from 'expo-document-picker'
+import { useLibrary } from '../../hooks/useLibrary'
+import { useAppContext } from '../../context/AppContext'
+import type { Song } from '@kara/shared'
 
-interface YTResult {
-  id: string
-  title: string
-  uploader: string
-  duration: number
-  thumbnail: string
-  url: string
-}
-
-export default function SearchScreen() {
+export default function LibraryScreen() {
+  const { songs, addSongs, removeSong } = useLibrary()
+  const { playSong, playerState } = useAppContext()
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<YTResult[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  const search = async () => {
-    if (!query.trim()) return
-    setLoading(true)
-    setError(null)
-    try {
-      // When connected to a party host, delegate to host's search endpoint;
-      // otherwise stub results for now (YouTube integration is Phase 6)
-      setResults([])
-      setError('YouTube search requires a connected desktop host or yt-dlp on the device.')
-    } catch (e) {
-      setError(String(e))
-    } finally {
-      setLoading(false)
+  const filtered = query.trim()
+    ? songs.filter(
+        (s) =>
+          s.title.toLowerCase().includes(query.toLowerCase()) ||
+          s.artist.toLowerCase().includes(query.toLowerCase()),
+      )
+    : songs
+
+  const handleImport = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['audio/mpeg', 'audio/mp4', 'audio/*'],
+      multiple: true,
+      copyToCacheDirectory: true,
+    })
+    if (!result.canceled && result.assets.length > 0) {
+      await addSongs(result.assets.map((a) => ({ uri: a.uri, name: a.name })))
     }
+  }
+
+  const renderSong = ({ item }: { item: Song }) => {
+    const isActive = playerState.song?.id === item.id
+    return (
+      <TouchableOpacity
+        style={[styles.songRow, isActive && styles.songRowActive]}
+        onPress={() => playSong(item)}
+        onLongPress={() => removeSong(item.id)}
+      >
+        <View style={styles.songInfo}>
+          <Text style={[styles.songTitle, isActive && styles.songTitleActive]} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={styles.songArtist} numberOfLines={1}>
+            {item.artist}
+          </Text>
+        </View>
+        {item.lrcPath && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>LRC</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    )
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchBar}>
+      <View style={styles.toolbar}>
         <TextInput
           style={styles.input}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search karaoke songs..."
+          placeholder="Search library…"
           placeholderTextColor="#555"
-          returnKeyType="search"
-          onSubmitEditing={search}
+          clearButtonMode="while-editing"
         />
-        <TouchableOpacity style={styles.btn} onPress={search}>
-          <Text style={styles.btnText}>Search</Text>
+        <TouchableOpacity style={styles.importBtn} onPress={handleImport}>
+          <Text style={styles.importBtnText}>+ Import</Text>
         </TouchableOpacity>
       </View>
 
-      {loading && <ActivityIndicator color="#ee0055" style={{ marginTop: 24 }} />}
-      {error && <Text style={styles.errorText}>{error}</Text>}
-
       <FlatList
-        data={results}
-        keyExtractor={(r) => r.id}
-        renderItem={({ item }) => (
-          <View style={styles.resultItem}>
-            {item.thumbnail ? (
-              <Image source={{ uri: item.thumbnail }} style={styles.thumb} />
-            ) : (
-              <View style={[styles.thumb, { backgroundColor: '#222' }]} />
-            )}
-            <View style={styles.resultInfo}>
-              <Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text>
-              <Text style={styles.resultSub}>{item.uploader}</Text>
-            </View>
-            <TouchableOpacity style={styles.addBtn}>
-              <Text style={styles.addBtnText}>+</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        data={filtered}
+        keyExtractor={(s) => s.id}
+        renderItem={renderSong}
         ListEmptyComponent={
-          !loading ? (
-            <Text style={styles.emptyText}>Search for a karaoke song above</Text>
-          ) : null
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No songs yet</Text>
+            <Text style={styles.emptyHint}>
+              Tap "+ Import" to add MP3 files from your device.{'\n'}
+              Long-press a song to remove it.
+            </Text>
+          </View>
         }
       />
     </View>
@@ -92,7 +97,13 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0a' },
-  searchBar: { flexDirection: 'row', padding: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: '#222' },
+  toolbar: {
+    flexDirection: 'row',
+    padding: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
   input: {
     flex: 1,
     backgroundColor: '#1a1a1a',
@@ -102,15 +113,39 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 15,
   },
-  btn: { backgroundColor: '#ee0055', borderRadius: 8, paddingHorizontal: 16, justifyContent: 'center' },
-  btnText: { color: '#fff', fontWeight: '700' },
-  errorText: { color: '#f88', padding: 16, fontSize: 13, textAlign: 'center' },
-  emptyText: { color: '#555', padding: 32, textAlign: 'center', fontSize: 15 },
-  resultItem: { flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderBottomColor: '#1a1a1a', alignItems: 'center', gap: 10 },
-  thumb: { width: 72, height: 54, borderRadius: 6 },
-  resultInfo: { flex: 1 },
-  resultTitle: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  resultSub: { color: '#666', fontSize: 12, marginTop: 2 },
-  addBtn: { backgroundColor: '#ee0055', borderRadius: 20, width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
-  addBtnText: { color: '#fff', fontSize: 20, fontWeight: '700', lineHeight: 22 },
+  importBtn: {
+    backgroundColor: '#ee0055',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  importBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  songRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+    borderLeftWidth: 3,
+    borderLeftColor: 'transparent',
+  },
+  songRowActive: {
+    backgroundColor: '#1a0a14',
+    borderLeftColor: '#ee0055',
+  },
+  songInfo: { flex: 1 },
+  songTitle: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  songTitleActive: { color: '#ee0055' },
+  songArtist: { color: '#888', fontSize: 13, marginTop: 2 },
+  badge: {
+    backgroundColor: '#0a1a2a',
+    borderRadius: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  badgeText: { color: '#4af', fontSize: 10, fontWeight: '700' },
+  empty: { padding: 40, alignItems: 'center' },
+  emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 10 },
+  emptyHint: { color: '#555', fontSize: 14, textAlign: 'center', lineHeight: 22 },
 })

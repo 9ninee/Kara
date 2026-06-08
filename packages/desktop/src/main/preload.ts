@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
+/** Convert an absolute local path to a kara:// URL the renderer can fetch */
+function getLocalFileUrl(absPath: string): string {
+  const normalized = absPath.replace(/\\/g, '/')
+  return `kara://local${normalized.startsWith('/') ? normalized : '/' + normalized}`
+}
+
 const api = {
   // Audio devices
   getAudioDevices: () => ipcRenderer.invoke('audio:get-devices'),
@@ -12,6 +18,11 @@ const api = {
   addSong: (filePaths: string[]) => ipcRenderer.invoke('library:add-songs', filePaths),
   deleteSong: (songId: string) => ipcRenderer.invoke('library:delete-song', songId),
   importFolder: (folderPath: string) => ipcRenderer.invoke('library:import-folder', folderPath),
+
+  // File system
+  getLocalFileUrl,
+  showOpenDialog: (options: { title?: string; filters?: { name: string; extensions: string[] }[]; properties?: string[] }) =>
+    ipcRenderer.invoke('dialog:open', options),
 
   // Providers
   searchYoutube: (query: string) => ipcRenderer.invoke('provider:youtube-search', query),
@@ -33,7 +44,7 @@ const api = {
     ipcRenderer.on(channel, (_event, ...args) => callback(...args))
   },
   off: (channel: string, callback: (...args: unknown[]) => void) => {
-    ipcRenderer.off(channel, (_event, ...args) => callback(...args))
+    ipcRenderer.removeListener(channel, (_event, ...args) => callback(...args))
   },
 }
 

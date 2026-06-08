@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { AppProvider, useAppContext } from './context/AppContext'
 import Player from './pages/Player'
 import Library from './pages/Library'
 import Queue from './pages/Queue'
@@ -13,8 +14,16 @@ const NAV_ITEMS: { id: Page; label: string }[] = [
   { id: 'settings', label: 'Settings' },
 ]
 
-export default function App(): React.ReactElement {
+function AppShell(): React.ReactElement {
   const [page, setPage] = useState<Page>('player')
+  const { requestedPage, clearRequestedPage } = useAppContext()
+
+  useEffect(() => {
+    if (requestedPage) {
+      setPage(requestedPage as Page)
+      clearRequestedPage()
+    }
+  }, [requestedPage, clearRequestedPage])
 
   return (
     <div style={{ display: 'flex', height: '100vh', flexDirection: 'column' }}>
@@ -49,11 +58,22 @@ export default function App(): React.ReactElement {
         ))}
       </nav>
       <main style={{ flex: 1, overflow: 'hidden' }}>
-        {page === 'player' && <Player />}
+        {/* Keep Player mounted always so audio state isn't lost on tab switch */}
+        <div style={{ display: page === 'player' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}>
+          <Player />
+        </div>
         {page === 'library' && <Library />}
         {page === 'queue' && <Queue />}
         {page === 'settings' && <Settings />}
       </main>
     </div>
+  )
+}
+
+export default function App(): React.ReactElement {
+  return (
+    <AppProvider>
+      <AppShell />
+    </AppProvider>
   )
 }

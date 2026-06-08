@@ -1,9 +1,10 @@
 import { Tabs } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
+import { AppProvider } from '../context/AppContext'
 
 export default function RootLayout() {
   return (
-    <>
+    <AppProvider>
       <StatusBar style="light" />
       <Tabs
         screenOptions={{
@@ -16,10 +17,10 @@ export default function RootLayout() {
         }}
       >
         <Tabs.Screen name="(tabs)/index" options={{ title: 'Player', tabBarLabel: 'Player' }} />
-        <Tabs.Screen name="(tabs)/search" options={{ title: 'Search', tabBarLabel: 'Search' }} />
+        <Tabs.Screen name="(tabs)/search" options={{ title: 'Library', tabBarLabel: 'Library' }} />
         <Tabs.Screen name="(tabs)/queue" options={{ title: 'Queue', tabBarLabel: 'Queue' }} />
         <Tabs.Screen name="(tabs)/settings" options={{ title: 'Settings', tabBarLabel: 'Settings' }} />
       </Tabs>
-    </>
+    </AppProvider>
   )
 }

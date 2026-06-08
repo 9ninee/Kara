@@ -1,17 +1,19 @@
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native'
 import Slider from '@react-native-community/slider'
-import { usePlayer } from '../../hooks/usePlayer'
+import { useAppContext } from '../../context/AppContext'
 import LyricsDisplay from '../../components/LyricsDisplay'
 
 export default function PlayerScreen() {
-  const { state, play, pause, seek, setMusicVolume, setMicVolume } = usePlayer()
-  const { isPlaying, currentTimeMs, durationMs, musicVolume, micVolume, lrcLines, song } = state
+  const { playerState, play, pause, seek, setMusicVolume, setMicVolume } = useAppContext()
+  const { isPlaying, currentTimeMs, durationMs, musicVolume, micVolume, lrcLines, song, loading } = playerState
 
   return (
     <View style={styles.container}>
       <View style={styles.lyricsArea}>
-        {lrcLines.length > 0 ? (
+        {loading ? (
+          <ActivityIndicator size="large" color="#ee0055" />
+        ) : lrcLines.length > 0 ? (
           <LyricsDisplay lines={lrcLines} currentTimeMs={currentTimeMs} />
         ) : song ? (
           <View style={styles.centeredInfo}>
@@ -19,11 +21,17 @@ export default function PlayerScreen() {
             <Text style={styles.songArtist}>{song.artist}</Text>
           </View>
         ) : (
-          <Text style={styles.emptyHint}>Search for a song to get started</Text>
+          <Text style={styles.emptyHint}>Open Library to pick a song</Text>
         )}
       </View>
 
       <View style={styles.controls}>
+        {song && (
+          <Text style={styles.nowPlaying} numberOfLines={1}>
+            {song.title} · {song.artist}
+          </Text>
+        )}
+
         <Slider
           style={styles.progress}
           minimumValue={0}
@@ -44,7 +52,7 @@ export default function PlayerScreen() {
           onPress={isPlaying ? pause : play}
           disabled={!song}
         >
-          <Text style={styles.playBtnText}>{isPlaying ? 'Pause' : 'Play'}</Text>
+          <Text style={styles.playBtnText}>{isPlaying ? '⏸  Pause' : '▶  Play'}</Text>
         </TouchableOpacity>
 
         <View style={styles.volumeRow}>
@@ -87,6 +95,7 @@ const styles = StyleSheet.create({
   songArtist: { fontSize: 18, color: '#888', marginTop: 8, textAlign: 'center' },
   emptyHint: { color: '#555', fontSize: 16 },
   controls: { padding: 16, backgroundColor: '#111', borderTopWidth: 1, borderTopColor: '#222' },
+  nowPlaying: { color: '#aaa', fontSize: 13, marginBottom: 4, textAlign: 'center' },
   progress: { width: '100%', height: 40 },
   timeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: -8 },
   timeLabel: { color: '#666', fontSize: 12 },

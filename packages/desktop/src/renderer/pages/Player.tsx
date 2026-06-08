@@ -1,57 +1,68 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { CDGPlayer, parseLRC } from '@kara/shared'
-import type { Song, LyricsLine } from '@kara/shared'
+import type { LyricsLine } from '@kara/shared'
 import { CDGDisplay, LRCDisplay } from '../components/LyricsDisplay'
 import { useAudioPlayer } from '../hooks/useAudioPlayer'
+import { useAppContext } from '../context/AppContext'
 
 export default function Player(): React.ReactElement {
+  const { currentSong } = useAppContext()
   const player = useAudioPlayer()
   const [cdgPlayer, setCdgPlayer] = useState<CDGPlayer | null>(null)
   const [lrcLines, setLrcLines] = useState<LyricsLine[]>([])
-  const [currentSong, setCurrentSong] = useState<Song | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const loadSong = useCallback(
-    async (song: Song) => {
-      setCurrentSong(song)
+  const loadCurrentSong = useCallback(async () => {
+    if (!currentSong) return
+    setLoading(true)
+    try {
+      const audioUrl = window.api.getLocalFileUrl(currentSong.audioPath)
+      await player.loadTrack(audioUrl)
 
-      await player.loadTrack(song.audioPath)
-
-      if (song.cdgPath) {
-        const resp = await fetch(song.cdgPath)
+      if (currentSong.cdgPath) {
+        const cdgUrl = window.api.getLocalFileUrl(currentSong.cdgPath)
+        const resp = await fetch(cdgUrl)
         const buf = await resp.arrayBuffer()
         setCdgPlayer(new CDGPlayer(buf))
         setLrcLines([])
-      } else if (song.lrcPath) {
+      } else if (currentSong.lrcPath) {
         setCdgPlayer(null)
-        const resp = await fetch(song.lrcPath)
+        const lrcUrl = window.api.getLocalFileUrl(currentSong.lrcPath)
+        const resp = await fetch(lrcUrl)
         const text = await resp.text()
         setLrcLines(parseLRC(text))
       } else {
         setCdgPlayer(null)
         setLrcLines([])
       }
-    },
-    [player],
-  )
+    } finally {
+      setLoading(false)
+    }
+  }, [currentSong, player])
+
+  useEffect(() => {
+    loadCurrentSong()
+  }, [currentSong]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { currentTimeMs, durationMs, isPlaying, volume, micVolume } = player.state
-  const progressPct = durationMs > 0 ? (currentTimeMs / durationMs) * 100 : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#000' }}>
       {/* Lyrics / CDG display */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {cdgPlayer ? (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ color: '#555', fontSize: 16 }}>Loading…</div>
+        ) : cdgPlayer ? (
           <CDGDisplay cdgPlayer={cdgPlayer} currentTimeMs={currentTimeMs} />
         ) : lrcLines.length > 0 ? (
           <LRCDisplay lines={lrcLines} currentTimeMs={currentTimeMs} />
         ) : currentSong ? (
           <div style={{ textAlign: 'center', color: '#666' }}>
-            <div style={{ fontSize: 32, fontWeight: 700 }}>{currentSong.title}</div>
+            <div style={{ fontSize: 32, fontWeight: 700, color: '#fff' }}>{currentSong.title}</div>
             <div style={{ fontSize: 20, marginTop: 8 }}>{currentSong.artist}</div>
           </div>
         ) : (
-          <div style={{ color: '#555', fontSize: 18 }}>Select a song from the Library</div>
+          <div style={{ color: '#555', fontSize: 18 }}>Double-click a song in the Library</div>
         )}
       </div>
 
@@ -66,32 +77,38 @@ export default function Player(): React.ReactElement {
           gap: 8,
         }}
       >
-        {/* Progress bar */}
+        {currentSong && (
+          <div style={{ fontSize: 13, color: '#aaa', marginBottom: 2 }}>
+            <span style={{ color: '#fff', fontWeight: 600 }}>{currentSong.title}</span>
+            {' · '}
+            <span>{currentSong.artist}</span>
+          </div>
+        )}
+
         <input
           type="range"
           min={0}
           max={durationMs || 1}
           value={currentTimeMs}
           onChange={(e) => player.seek(Number(e.target.value))}
-          style={{ width: '100%', accentColor: '#e05' }}
+          style={{ width: '100%', accentColor: '#e05', cursor: 'pointer' }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666', marginTop: -4 }}>
           <span>{formatMs(currentTimeMs)}</span>
           <span>{formatMs(durationMs)}</span>
         </div>
 
-        {/* Buttons + volume */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <button
             onClick={isPlaying ? player.pause : player.play}
             disabled={!currentSong}
-            style={btnStyle}
+            style={{ ...btnStyle, opacity: currentSong ? 1 : 0.4 }}
           >
-            {isPlaying ? 'Pause' : 'Play'}
+            {isPlaying ? '⏸ Pause' : '▶ Play'}
           </button>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-            <span style={{ color: '#aaa', width: 60 }}>Music</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <span style={{ color: '#aaa', minWidth: 48 }}>Music</span>
             <input
               type="range"
               min={0}
@@ -99,12 +116,15 @@ export default function Player(): React.ReactElement {
               step={0.01}
               value={volume}
               onChange={(e) => player.setVolume(Number(e.target.value))}
-              style={{ accentColor: '#e05', width: 100 }}
+              style={{ accentColor: '#e05', width: 90 }}
             />
+            <span style={{ color: '#666', fontSize: 11, minWidth: 28 }}>
+              {Math.round(volume * 100)}%
+            </span>
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-            <span style={{ color: '#aaa', width: 40 }}>Mic</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <span style={{ color: '#aaa', minWidth: 28 }}>Mic</span>
             <input
               type="range"
               min={0}
@@ -112,8 +132,11 @@ export default function Player(): React.ReactElement {
               step={0.01}
               value={micVolume}
               onChange={(e) => player.setMicVolume(Number(e.target.value))}
-              style={{ accentColor: '#4af', width: 100 }}
+              style={{ accentColor: '#4af', width: 90 }}
             />
+            <span style={{ color: '#666', fontSize: 11, minWidth: 28 }}>
+              {Math.round(micVolume * 100)}%
+            </span>
           </label>
         </div>
       </div>
@@ -125,7 +148,7 @@ const btnStyle: React.CSSProperties = {
   background: '#e05',
   border: 'none',
   color: '#fff',
-  padding: '8px 24px',
+  padding: '8px 20px',
   borderRadius: 8,
   cursor: 'pointer',
   fontWeight: 700,
@@ -134,6 +157,5 @@ const btnStyle: React.CSSProperties = {
 
 function formatMs(ms: number): string {
   const s = Math.floor(ms / 1000)
-  const m = Math.floor(s / 60)
-  return `${m}:${String(s % 60).padStart(2, '0')}`
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
