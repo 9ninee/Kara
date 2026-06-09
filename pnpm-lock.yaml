@@ -32,6 +32,9 @@ importers:
       socket.io:
         specifier: ^4.7.5
         version: 4.8.3
+      socket.io-client:
+        specifier: ^4.8.3
+        version: 4.8.3
     devDependencies:
       '@electron-toolkit/preload':
         specifier: ^3.0.1

@@ -17,6 +17,7 @@ let httpServer: ReturnType<typeof createServer> | null = null
 let io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData> | null =
   null
 let session: PartySession | null = null
+let cachedQr = ''
 
 const HOST_ID = 'host'
 const PORT = 3000
@@ -25,8 +26,8 @@ function emptyQueue(): QueueState {
   return { items: [], nowPlaying: null, history: [] }
 }
 
-export async function startPartyServer(): Promise<{ sessionId: string; port: number }> {
-  if (io) return { sessionId: session!.id, port: PORT }
+export async function startPartyServer(): Promise<{ sessionId: string; port: number; qr: string }> {
+  if (io) return { sessionId: session!.id, port: PORT, qr: cachedQr }
 
   session = {
     id: randomUUID(),
@@ -112,9 +113,9 @@ export async function startPartyServer(): Promise<{ sessionId: string; port: num
   })
 
   await new Promise<void>((resolve) => httpServer!.listen(PORT, resolve))
-  await startDiscovery(session.id, PORT)
+  cachedQr = await startDiscovery(session.id, PORT)
 
-  return { sessionId: session.id, port: PORT }
+  return { sessionId: session.id, port: PORT, qr: cachedQr }
 }
 
 export async function stopPartyServer(): Promise<void> {
@@ -128,4 +129,5 @@ export async function stopPartyServer(): Promise<void> {
     httpServer = null
   }
   session = null
+  cachedQr = ''
 }

@@ -16,7 +16,8 @@
     "@kara/shared": "workspace:*",
     "bonjour-service": "^1.2.1",
     "qrcode": "^1.5.3",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.1",
