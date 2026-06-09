@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'claude/**', 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  shared:
+    name: shared — build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build shared
+        run: pnpm --filter @kara/shared build
+
+      - name: Test shared
+        run: pnpm --filter @kara/shared test
+
+  desktop-typecheck:
+    name: desktop — typecheck
+    runs-on: ubuntu-latest
+    needs: shared
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build shared (dep)
+        run: pnpm --filter @kara/shared build
+
+      - name: Typecheck renderer
+        run: pnpm --filter @kara/desktop exec tsc --noEmit -p src/renderer/tsconfig.json
+
+  mobile-typecheck:
+    name: mobile — typecheck
+    runs-on: ubuntu-latest
+    needs: shared
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build shared (dep)
+        run: pnpm --filter @kara/shared build
+
+      - name: Typecheck mobile
+        run: pnpm --filter @kara/mobile exec tsc --noEmit
