@@ -3,12 +3,13 @@ import DevicePicker from '../components/DevicePicker'
 import { useAppContext } from '../context/AppContext'
 
 export default function Settings(): React.ReactElement {
-  const { player } = useAppContext()
+  const { player, currentSong } = useAppContext()
   const [outputDevice, setOutputDevice] = useState('')
   const [inputDevice, setInputDevice] = useState('')
   const [micStatus, setMicStatus] = useState<'idle' | 'granted' | 'denied'>('idle')
   const [chromecasts, setChromecasts] = useState<{ id: string; name: string; host: string; port: number }[]>([])
   const [scanning, setScanning] = useState(false)
+  const [castStatus, setCastStatus] = useState<string | null>(null)
 
   const applyOutput = async (id: string) => {
     setOutputDevice(id)
@@ -82,6 +83,11 @@ export default function Settings(): React.ReactElement {
             {scanning ? 'Scanning...' : 'Scan for Chromecast'}
           </button>
         </div>
+        {castStatus && (
+          <div style={{ marginTop: 8, fontSize: 12, color: castStatus.startsWith('Error') ? '#e05' : '#4af' }}>
+            {castStatus}
+          </div>
+        )}
         {chromecasts.map((d) => (
           <div
             key={d.id}
@@ -97,7 +103,12 @@ export default function Settings(): React.ReactElement {
           >
             <span>{d.name}</span>
             <button
-              onClick={() => (window as any).api.castToChromecast(d, 'http://localhost')}
+              onClick={async () => {
+                if (!currentSong) { setCastStatus('No song loaded'); return }
+                setCastStatus('Casting…')
+                const result = await (window as any).api.castToChromecast(d, currentSong.audioPath)
+                setCastStatus(result.success ? `Casting to ${d.name}` : `Error: ${result.error}`)
+              }}
               style={{ ...btnStyle, padding: '4px 12px', fontSize: 12 }}
             >
               Cast

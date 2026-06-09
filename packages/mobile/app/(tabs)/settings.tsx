@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native'
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native'
 import Slider from '@react-native-community/slider'
 import { useParty } from '../../hooks/useParty'
 import { useAppContext } from '../../context/AppContext'
+import CastingButton from '../../components/CastingButton'
 
 export default function SettingsScreen() {
   const { connect, connected, session } = useParty()
@@ -23,7 +24,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <Text style={styles.sectionTitle}>Microphone</Text>
       <View style={styles.card}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -85,12 +86,15 @@ export default function SettingsScreen() {
         </View>
       )}
 
-      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>About</Text>
+      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Casting</Text>
+      <CastingButton />
+
+      <Text style={[styles.sectionTitle, { marginTop: 8 }]}>About</Text>
       <View style={styles.card}>
         <Text style={styles.cardLabel}>Kara v0.1.0</Text>
         <Text style={styles.cardValue}>Open-source karaoke for macOS &amp; iOS</Text>
       </View>
-    </View>
+    </ScrollView>
   )
 }
 
