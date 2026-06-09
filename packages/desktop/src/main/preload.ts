@@ -28,6 +28,10 @@ const api = {
   searchYoutube: (query: string) => ipcRenderer.invoke('provider:youtube-search', query),
   downloadYoutube: (url: string, title: string) =>
     ipcRenderer.invoke('provider:youtube-download', url, title),
+  searchKaraoke: (query: string) => ipcRenderer.invoke('karaoke:search', query),
+  downloadKaraoke: (trackId: string) => ipcRenderer.invoke('karaoke:download', trackId),
+  configureKaraokeApi: (baseUrl: string, apiKey: string) =>
+    ipcRenderer.invoke('karaoke:configure', baseUrl, apiKey),
 
   // Casting
   discoverChromecast: () => ipcRenderer.invoke('cast:discover-chromecast'),
