@@ -1,24 +1,32 @@
 import React, { useState } from 'react'
 import DevicePicker from '../components/DevicePicker'
-import { useAudioPlayer } from '../hooks/useAudioPlayer'
+import { useAppContext } from '../context/AppContext'
 
 export default function Settings(): React.ReactElement {
-  const player = useAudioPlayer()
+  const { player } = useAppContext()
   const [outputDevice, setOutputDevice] = useState('')
   const [inputDevice, setInputDevice] = useState('')
+  const [micStatus, setMicStatus] = useState<'idle' | 'granted' | 'denied'>('idle')
   const [chromecasts, setChromecasts] = useState<{ id: string; name: string; host: string; port: number }[]>([])
   const [scanning, setScanning] = useState(false)
 
   const applyOutput = async (id: string) => {
     setOutputDevice(id)
     if (id) await player.setOutputDevice(id)
-    await (window as any).api.setOutputDevice(id)
   }
 
   const applyInput = async (id: string) => {
     setInputDevice(id)
     if (id) await player.setInputDevice(id)
-    await (window as any).api.setInputDevice(id)
+  }
+
+  const requestMic = async () => {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true })
+      setMicStatus('granted')
+    } catch {
+      setMicStatus('denied')
+    }
   }
 
   const scanChromecast = async () => {
@@ -42,12 +50,25 @@ export default function Settings(): React.ReactElement {
             selected={outputDevice}
             onChange={applyOutput}
           />
-          <DevicePicker
-            type="audioinput"
-            label="Microphone input"
-            selected={inputDevice}
-            onChange={applyInput}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <DevicePicker
+              type="audioinput"
+              label="Microphone input"
+              selected={inputDevice}
+              onChange={applyInput}
+            />
+            {micStatus === 'idle' && (
+              <button onClick={requestMic} style={{ ...btnStyle, alignSelf: 'flex-start', fontSize: 12, padding: '5px 14px' }}>
+                Grant microphone permission
+              </button>
+            )}
+            {micStatus === 'granted' && (
+              <span style={{ fontSize: 12, color: '#4a4' }}>✓ Microphone access granted</span>
+            )}
+            {micStatus === 'denied' && (
+              <span style={{ fontSize: 12, color: '#e05' }}>✗ Microphone access denied — check system permissions</span>
+            )}
+          </div>
         </div>
       </section>
 
@@ -62,7 +83,18 @@ export default function Settings(): React.ReactElement {
           </button>
         </div>
         {chromecasts.map((d) => (
-          <div key={d.id} style={{ marginTop: 8, padding: 10, background: '#1a1a1a', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div
+            key={d.id}
+            style={{
+              marginTop: 8,
+              padding: 10,
+              background: '#1a1a1a',
+              borderRadius: 8,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
             <span>{d.name}</span>
             <button
               onClick={() => (window as any).api.castToChromecast(d, 'http://localhost')}

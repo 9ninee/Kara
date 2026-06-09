@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useCallback, useRef } from 
 import { Audio, AVPlaybackStatus } from 'expo-av'
 import { parseLRC } from '@kara/shared'
 import type { Song, LyricsLine } from '@kara/shared'
+import { useMic } from '../hooks/useMic'
+import type { MicControls } from '../hooks/useMic'
 
 export interface PlayerState {
   song: Song | null
@@ -22,6 +24,7 @@ export interface AppContextValue {
   seek: (ms: number) => Promise<void>
   setMusicVolume: (v: number) => void
   setMicVolume: (v: number) => void
+  mic: MicControls
 }
 
 const defaultState: PlayerState = {
@@ -43,12 +46,14 @@ const AppContext = createContext<AppContextValue>({
   seek: async () => {},
   setMusicVolume: () => {},
   setMicVolume: () => {},
+  mic: { state: { isActive: false, volume: 0.8 }, start: async () => {}, stop: async () => {}, setVolume: () => {} },
 })
 
 export function AppProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const soundRef = useRef<Audio.Sound | null>(null)
   const musicVolumeRef = useRef(1)
   const [state, setState] = useState<PlayerState>(defaultState)
+  const mic = useMic()
 
   const onStatus = useCallback((status: AVPlaybackStatus) => {
     if (!status.isLoaded) return
@@ -123,7 +128,7 @@ export function AppProvider({ children }: { children: React.ReactNode }): React.
   }, [])
 
   return (
-    <AppContext.Provider value={{ playerState: state, playSong, play, pause, seek, setMusicVolume, setMicVolume }}>
+    <AppContext.Provider value={{ playerState: state, playSong, play, pause, seek, setMusicVolume, setMicVolume, mic }}>
       {children}
     </AppContext.Provider>
   )

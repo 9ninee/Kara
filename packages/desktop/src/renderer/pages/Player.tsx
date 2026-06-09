@@ -2,12 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { CDGPlayer, parseLRC } from '@kara/shared'
 import type { LyricsLine } from '@kara/shared'
 import { CDGDisplay, LRCDisplay } from '../components/LyricsDisplay'
-import { useAudioPlayer } from '../hooks/useAudioPlayer'
 import { useAppContext } from '../context/AppContext'
 
 export default function Player(): React.ReactElement {
-  const { currentSong } = useAppContext()
-  const player = useAudioPlayer()
+  const { currentSong, player } = useAppContext()
   const [cdgPlayer, setCdgPlayer] = useState<CDGPlayer | null>(null)
   const [lrcLines, setLrcLines] = useState<LyricsLine[]>([])
   const [loading, setLoading] = useState(false)

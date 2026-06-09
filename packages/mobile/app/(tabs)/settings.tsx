@@ -1,9 +1,12 @@
 import React, { useState } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native'
+import Slider from '@react-native-community/slider'
 import { useParty } from '../../hooks/useParty'
+import { useAppContext } from '../../context/AppContext'
 
 export default function SettingsScreen() {
   const { connect, connected, session } = useParty()
+  const { mic } = useAppContext()
   const [hostIp, setHostIp] = useState('')
   const [name, setName] = useState('')
 
@@ -21,6 +24,31 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.sectionTitle}>Microphone</Text>
+      <View style={styles.card}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={styles.cardLabel}>Mic passthrough</Text>
+          <TouchableOpacity
+            onPress={mic.state.isActive ? mic.stop : mic.start}
+            style={[styles.joinBtn, { paddingVertical: 8, paddingHorizontal: 16, marginTop: 0 }]}
+          >
+            <Text style={styles.joinBtnText}>{mic.state.isActive ? 'Stop Mic' : 'Start Mic'}</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.fieldLabel}>Mic volume</Text>
+        <Slider
+          style={{ width: '100%', height: 36 }}
+          minimumValue={0}
+          maximumValue={1}
+          step={0.01}
+          value={mic.state.volume}
+          onValueChange={mic.setVolume}
+          minimumTrackTintColor="#ee0055"
+          maximumTrackTintColor="#333"
+          thumbTintColor="#ee0055"
+        />
+      </View>
+
       <Text style={styles.sectionTitle}>Party Mode</Text>
 
       {connected ? (
