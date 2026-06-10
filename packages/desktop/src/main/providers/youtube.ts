@@ -1,9 +1,9 @@
-import { IpcMain } from 'electron'
-import { execFile } from 'child_process'
+import { IpcMain, WebContents } from 'electron'
+import { spawn, execFile } from 'child_process'
 import { join } from 'path'
 import { app } from 'electron'
 import { promisify } from 'util'
-import { existsSync } from 'fs'
+import { existsSync, mkdirSync } from 'fs'
 
 const execFileAsync = promisify(execFile)
 
@@ -13,7 +13,7 @@ function getYtDlpPath(): string {
   return 'yt-dlp'
 }
 
-interface YTSearchResult {
+export interface YTSearchResult {
   id: string
   title: string
   uploader: string
@@ -48,29 +48,55 @@ export async function searchYoutube(query: string): Promise<YTSearchResult[]> {
     })
 }
 
-export async function downloadYoutube(url: string, title: string): Promise<string> {
+export function downloadYoutube(url: string, title: string, webContents?: WebContents): Promise<string> {
   const ytDlp = getYtDlpPath()
   const outputDir = join(app.getPath('userData'), 'downloads')
+  mkdirSync(outputDir, { recursive: true })
   const outputTemplate = join(outputDir, '%(title)s.%(ext)s')
 
-  await execFileAsync(ytDlp, [
-    url,
-    '-x',
-    '--audio-format',
-    'mp3',
-    '--audio-quality',
-    '0',
-    '-o',
-    outputTemplate,
-    '--no-warnings',
-  ])
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ytDlp, [
+      url,
+      '-x',
+      '--audio-format', 'mp3',
+      '--audio-quality', '0',
+      '-o', outputTemplate,
+      '--no-warnings',
+      '--newline',
+    ])
 
-  return outputDir
+    let outPath = outputDir
+    const progressRe = /\[download\]\s+([\d.]+)%/
+
+    proc.stdout.on('data', (chunk: Buffer) => {
+      const text = chunk.toString()
+      const match = progressRe.exec(text)
+      if (match && webContents && !webContents.isDestroyed()) {
+        webContents.send('download:progress', { url, title, percent: parseFloat(match[1]) })
+      }
+      const destMatch = /\[ExtractAudio\] Destination: (.+)/.exec(text) ??
+                        /\[download\] Destination: (.+)/.exec(text)
+      if (destMatch) outPath = destMatch[1].trim()
+    })
+
+    proc.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString()
+      if (!text.includes('WARNING')) reject(new Error(text.trim()))
+    })
+
+    proc.on('close', (code) => {
+      if (webContents && !webContents.isDestroyed()) {
+        webContents.send('download:progress', { url, title, percent: 100 })
+      }
+      if (code === 0) resolve(outPath)
+      else reject(new Error(`yt-dlp exited with code ${code}`))
+    })
+  })
 }
 
-export function registerProviderHandlers(ipcMain: IpcMain): void {
+export function registerProviderHandlers(ipcMain: IpcMain, webContents?: WebContents): void {
   ipcMain.handle('provider:youtube-search', (_e, query: string) => searchYoutube(query))
-  ipcMain.handle('provider:youtube-download', (_e, url: string, title: string) =>
-    downloadYoutube(url, title),
+  ipcMain.handle('provider:youtube-download', (e, url: string, title: string) =>
+    downloadYoutube(url, title, webContents ?? e.sender),
   )
 }

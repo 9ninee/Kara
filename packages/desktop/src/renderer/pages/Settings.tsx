@@ -10,6 +10,9 @@ export default function Settings(): React.ReactElement {
   const [chromecasts, setChromecasts] = useState<{ id: string; name: string; host: string; port: number }[]>([])
   const [scanning, setScanning] = useState(false)
   const [castStatus, setCastStatus] = useState<string | null>(null)
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => localStorage.getItem('kara:apiBaseUrl') ?? '')
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('kara:apiKey') ?? '')
+  const [apiSaved, setApiSaved] = useState(false)
 
   const applyOutput = async (id: string) => {
     setOutputDevice(id)
@@ -74,6 +77,46 @@ export default function Settings(): React.ReactElement {
       </section>
 
       <section>
+        <h3 style={{ marginBottom: 16, fontSize: 16, fontWeight: 700, color: '#e05' }}>Online Karaoke API</h3>
+        <p style={{ fontSize: 13, color: '#888', marginBottom: 12 }}>
+          Connect to a karaoke platform's REST API. Results appear in Library → Search Online → Karaoke API tab.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <label style={{ fontSize: 13, color: '#aaa' }}>
+            Base URL
+            <input
+              value={apiBaseUrl}
+              onChange={(e) => setApiBaseUrl(e.target.value)}
+              placeholder="https://api.karaoke-service.com/v1"
+              style={{ ...inputStyle, display: 'block', marginTop: 4 }}
+            />
+          </label>
+          <label style={{ fontSize: 13, color: '#aaa' }}>
+            API Key
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="your-api-key"
+              style={{ ...inputStyle, display: 'block', marginTop: 4 }}
+            />
+          </label>
+          <button
+            onClick={async () => {
+              localStorage.setItem('kara:apiBaseUrl', apiBaseUrl)
+              localStorage.setItem('kara:apiKey', apiKey)
+              await (window as any).api.configureKaraokeApi(apiBaseUrl, apiKey)
+              setApiSaved(true)
+              setTimeout(() => setApiSaved(false), 2000)
+            }}
+            style={{ ...btnStyle, alignSelf: 'flex-start' }}
+          >
+            {apiSaved ? '✓ Saved' : 'Save'}
+          </button>
+        </div>
+      </section>
+
+      <section>
         <h3 style={{ marginBottom: 16, fontSize: 16, fontWeight: 700, color: '#e05' }}>Casting</h3>
         <p style={{ fontSize: 13, color: '#888', marginBottom: 12 }}>
           AirPlay: Select the AirPlay device from the Output Device dropdown above.
@@ -118,6 +161,16 @@ export default function Settings(): React.ReactElement {
       </section>
     </div>
   )
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  background: '#1a1a1a',
+  border: '1px solid #333',
+  borderRadius: 6,
+  color: '#fff',
+  padding: '7px 10px',
+  fontSize: 13,
 }
 
 const btnStyle: React.CSSProperties = {

@@ -7,6 +7,7 @@ import { registerAudioHandlers } from './audio/deviceManager'
 import { registerLibraryHandlers } from './library/database'
 import { registerProviderHandlers } from './providers/youtube'
 import { registerCastingHandlers } from './casting/chromecast'
+import { registerKaraokeApiHandlers } from './providers/karaokeApi'
 
 // Must be called before app.whenReady()
 protocol.registerSchemesAsPrivileged([
@@ -61,6 +62,7 @@ app.whenReady().then(async () => {
   registerLibraryHandlers(ipcMain)
   registerProviderHandlers(ipcMain)
   registerCastingHandlers(ipcMain)
+  registerKaraokeApiHandlers(ipcMain)
 
   ipcMain.handle('dialog:open', (_e, options: Electron.OpenDialogOptions) => {
     return dialog.showOpenDialog(mainWindow!, options)
