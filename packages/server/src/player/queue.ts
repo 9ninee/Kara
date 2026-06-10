@@ -15,70 +15,79 @@ export interface QueueState {
   history: QueueItem[]
 }
 
-// Fair singer rotation: each singer gets exactly one slot per round before repeating.
-// Insertion point = just after the last item belonging to this singer, OR after the
-// last item of singers who haven't had a turn this round yet, whichever comes first.
+// Fair singer rotation: songs are grouped into implicit "rounds" — a singer's Nth
+// queued song belongs to round N. New songs are inserted before the first item of
+// a later round, so every singer gets one turn per round regardless of how many
+// songs anyone has queued.
 export class FairQueue {
   private items: QueueItem[] = []
   private history: QueueItem[] = []
-  private nowPlaying: QueueState['nowPlaying'] = null
+  private current: QueueItem | null = null
+  private positionMs = 0
+  private isPlaying = false
 
   add(song: Song, singerName: string): QueueItem {
     const item: QueueItem = { id: randomUUID(), song, singerName, addedAt: Date.now(), skipVotes: [] }
 
-    // Find last position of this singer in the queue
-    const lastOwn = this.items.map((x, i) => x.singerName === singerName ? i : -1).filter(i => i >= 0).pop() ?? -1
+    // Round of the new item = how many songs this singer already has queued + 1
+    const round = this.items.filter(i => i.singerName === singerName).length + 1
 
-    if (lastOwn === -1) {
-      // Singer not in queue — append at end
-      this.items.push(item)
-    } else {
-      // Insert one position after their last song
-      this.items.splice(lastOwn + 1, 0, item)
+    // Insert before the first item belonging to a later round
+    const occurrences = new Map<string, number>()
+    let insertAt = this.items.length
+    for (let i = 0; i < this.items.length; i++) {
+      const n = (occurrences.get(this.items[i].singerName) ?? 0) + 1
+      occurrences.set(this.items[i].singerName, n)
+      if (n > round) { insertAt = i; break }
     }
+    this.items.splice(insertAt, 0, item)
     return item
   }
 
-  remove(itemId: string): void {
+  remove(itemId: string): boolean {
+    const before = this.items.length
     this.items = this.items.filter(i => i.id !== itemId)
+    return this.items.length < before
   }
 
-  skipVote(itemId: string, voterId: string): boolean {
-    const item = this.items[0]
-    if (!item || item.id !== itemId) return false
+  // Returns the voted item, or null if not found. Votes are allowed on the
+  // currently playing item and on any upcoming item.
+  skipVote(itemId: string, voterId: string): QueueItem | null {
+    const item = this.current?.id === itemId ? this.current : this.items.find(i => i.id === itemId)
+    if (!item) return null
     if (!item.skipVotes.includes(voterId)) item.skipVotes.push(voterId)
-    return true
+    return item
   }
 
-  shouldAutoSkip(connectedCount: number): boolean {
-    const item = this.items[0]
-    if (!item) return false
+  static hasMajority(item: QueueItem, connectedCount: number): boolean {
     return item.skipVotes.length > connectedCount / 2
   }
 
+  // Retire the current item into history and promote the next queued item.
   advance(): QueueItem | null {
-    const done = this.items.shift() ?? null
-    if (done) this.history.unshift(done)
-    if (this.history.length > 50) this.history.pop()
-
-    const next = this.items[0] ?? null
-    if (next) {
-      this.nowPlaying = { item: next, positionMs: 0, isPlaying: false }
-    } else {
-      this.nowPlaying = null
+    if (this.current) {
+      this.history.unshift(this.current)
+      if (this.history.length > 50) this.history.pop()
     }
-    return next
+    this.current = this.items.shift() ?? null
+    this.positionMs = 0
+    return this.current
+  }
+
+  getNowPlaying(): QueueItem | null {
+    return this.current
   }
 
   updatePosition(positionMs: number, isPlaying: boolean): void {
-    if (this.nowPlaying) Object.assign(this.nowPlaying, { positionMs, isPlaying })
+    this.positionMs = positionMs
+    this.isPlaying = isPlaying
   }
 
   getState(): QueueState {
-    return { items: [...this.items], nowPlaying: this.nowPlaying, history: [...this.history] }
-  }
-
-  peek(): QueueItem | null {
-    return this.items[0] ?? null
+    return {
+      items: [...this.items],
+      nowPlaying: this.current ? { item: this.current, positionMs: this.positionMs, isPlaying: this.isPlaying } : null,
+      history: [...this.history],
+    }
   }
 }

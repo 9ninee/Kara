@@ -9,7 +9,9 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "format": "prettier --write \"packages/**/*.{ts,tsx,json}\""
+    "format": "prettier --write \"packages/**/*.{ts,tsx,json}\"",
+    "dev:server": "pnpm --filter @kara/server dev",
+    "start": "pnpm --filter @kara/shared build && pnpm --filter @kara/web build && pnpm --filter @kara/server build && node packages/server/dist/index.js"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

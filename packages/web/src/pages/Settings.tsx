@@ -29,10 +29,10 @@ export default function Settings({ mic, onStartMic, onStopMic, onSetMicGain }: P
       const r = await fetch('/api/library/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: folderPath }),
+        body: JSON.stringify({ folder: folderPath }),
       })
       const d = await r.json()
-      setScanMsg(r.ok ? `Scanned: ${d.added ?? 0} songs added` : `Error: ${d.error}`)
+      setScanMsg(r.ok ? `Scanned: ${d.indexed ?? 0} new songs added` : `Error: ${d.error}`)
     } catch { setScanMsg('Network error') }
     finally { setScanning(false) }
   }

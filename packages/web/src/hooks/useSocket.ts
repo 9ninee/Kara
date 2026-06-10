@@ -5,7 +5,7 @@ export interface PlaybackState {
   songId: string | null
   positionMs: number
   isPlaying: boolean
-  duration: number
+  duration: number // seconds
 }
 
 export interface QueueItem {
@@ -24,11 +24,13 @@ export interface QueueState {
 export interface AppState {
   queue: QueueState
   playback: PlaybackState
+  connectedCount: number
 }
 
 const DEFAULT_STATE: AppState = {
   queue: { items: [], nowPlaying: null, history: [] },
   playback: { songId: null, positionMs: 0, isPlaying: false, duration: 0 },
+  connectedCount: 1,
 }
 
 export function useSocket() {
@@ -42,9 +44,17 @@ export function useSocket() {
 
     socket.on('connect', () => setConnected(true))
     socket.on('disconnect', () => setConnected(false))
-    socket.on('state', (s: AppState) => setState(s))
+    socket.on('state', (s: Partial<AppState>) => {
+      setState(prev => ({ ...prev, ...s, connectedCount: s.connectedCount ?? prev.connectedCount }))
+    })
     socket.on('tick', ({ positionMs }: { positionMs: number }) => {
-      setState(prev => ({ ...prev, playback: { ...prev.playback, positionMs } }))
+      setState(prev => ({
+        ...prev,
+        playback: { ...prev.playback, positionMs },
+        queue: prev.queue.nowPlaying
+          ? { ...prev.queue, nowPlaying: { ...prev.queue.nowPlaying, positionMs } }
+          : prev.queue,
+      }))
     })
 
     return () => { socket.disconnect() }

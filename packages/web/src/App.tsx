@@ -14,7 +14,6 @@ export default function App() {
   const [singerName, setSingerName] = useState(() => localStorage.getItem('singerName') ?? '')
   const [showNamePrompt, setShowNamePrompt] = useState(!localStorage.getItem('singerName'))
   const [nameInput, setNameInput] = useState('')
-  const [connectedCount, setConnectedCount] = useState(1)
 
   const { state, connected, emit } = useSocket()
   const { audioRef, cdgPlayer, lrcLines, loading, loadSong } = usePlayer()
@@ -22,25 +21,19 @@ export default function App() {
 
   const prevSongId = useRef<string | null>(null)
 
-  // Load song when nowPlaying changes
+  // Load song when nowPlaying changes; stop audio when the queue runs out
   useEffect(() => {
     const np = state.queue.nowPlaying
     const songId = np?.item.song.id ?? null
     if (songId && songId !== prevSongId.current) {
       prevSongId.current = songId
       loadSong(songId, np!.item.song.format)
+    } else if (!songId && prevSongId.current) {
+      prevSongId.current = null
+      const audio = audioRef.current
+      if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load() }
     }
-  }, [state.queue.nowPlaying, loadSong])
-
-  // Track connected count from server
-  useEffect(() => {
-    // Approximate via queue voters; server could emit this too
-    const voters = new Set<string>()
-    state.queue.items.forEach(i => i.skipVotes.forEach(v => voters.add(v)))
-    if (state.queue.nowPlaying) state.queue.nowPlaying.item.skipVotes.forEach(v => voters.add(v))
-    if (singerName) voters.add(singerName)
-    setConnectedCount(Math.max(1, voters.size))
-  }, [state.queue, singerName])
+  }, [state.queue.nowPlaying, loadSong, audioRef])
 
   const saveName = () => {
     const n = nameInput.trim()
@@ -76,7 +69,9 @@ export default function App() {
   }, [emit, state.playback.isPlaying])
 
   const handleEnded = useCallback(() => {
-    emit('playback:ended')
+    // Send the songId so the server can ignore duplicate 'ended' events from
+    // other clients whose audio finished for the same track.
+    emit('playback:ended', { songId: prevSongId.current })
   }, [emit])
 
   if (showNamePrompt) {
@@ -111,7 +106,7 @@ export default function App() {
         <div style={{ fontWeight: 800, fontSize: 18, color: '#e05', letterSpacing: -0.5, marginRight: 8 }}>KARA</div>
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: 11, color: connected ? '#4c8' : '#c44', marginRight: 8 }}>
-          {connected ? '● Live' : '○ Connecting'}
+          {connected ? `● Live · ${state.connectedCount} here` : '○ Connecting'}
         </div>
         <div style={{ fontSize: 12, color: '#555', background: '#111', border: '1px solid #1a1a1a', borderRadius: 20, padding: '3px 10px', cursor: 'pointer' }}
           onClick={() => { localStorage.removeItem('singerName'); setSingerName(''); setShowNamePrompt(true); setNameInput('') }}>
@@ -127,6 +122,7 @@ export default function App() {
             songId={state.playback.songId}
             format={np?.item.song.format ?? ''}
             positionMs={state.playback.positionMs}
+            durationMs={state.playback.duration * 1000}
             isPlaying={state.playback.isPlaying}
             cdgPlayer={cdgPlayer}
             lrcLines={lrcLines}
@@ -150,7 +146,7 @@ export default function App() {
             onSkipVote={handleSkipVote}
             onForceSkip={handleForceSkip}
             onRemove={handleRemove}
-            connectedCount={connectedCount}
+            connectedCount={state.connectedCount}
           />
         )}
         {page === 'settings' && (
@@ -183,13 +179,6 @@ export default function App() {
           </button>
         ))}
       </div>
-
-      {/* Queue badge overlay on Queue tab */}
-      {state.queue.items.length > 0 && (
-        <style>{`
-          button[data-tab="queue"]::after { content: '${state.queue.items.length}'; }
-        `}</style>
-      )}
 
       <style>{`
         * { box-sizing: border-box; }

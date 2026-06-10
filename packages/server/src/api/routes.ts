@@ -1,17 +1,15 @@
-import { Router, Request, Response, type IRouter } from 'express'
+import { Router, type IRouter } from 'express'
 import { join } from 'path'
-import { createReadStream, statSync, existsSync } from 'fs'
-import { searchSongs, getArtists, getSongsByArtist, getSong, deleteSong, addSong, getHistory } from '../library/database.js'
+import { createReadStream, statSync, existsSync, readFileSync } from 'fs'
+import { searchSongs, getArtists, getSongsByArtist, getSong, deleteSong, addSong, getHistory, DATA_DIR } from '../library/database.js'
 import { scanFolder } from '../library/scanner.js'
 import { searchYoutube, downloadYoutube } from '../sources/youtube.js'
 import { searchUSDB } from '../sources/usdb.js'
 import multer from 'multer'
-import { randomUUID } from 'crypto'
 import { parseKsc } from '../formats/mkv.js'
-import { readFileSync } from 'fs'
 
 const router: IRouter = Router()
-const upload = multer({ dest: join(process.cwd(), '.kara-data', 'uploads') })
+const upload = multer({ dest: join(DATA_DIR, 'uploads') })
 
 // ── Library ───────────────────────────────────────────────────────────────────
 
@@ -36,12 +34,17 @@ router.get('/library/history', (_req, res) => {
   res.json(getHistory())
 })
 
-// Scan a folder path
+// Scan a folder path (accepts {folder} or {path})
 router.post('/library/scan', async (req, res) => {
-  const { folder } = req.body as { folder: string }
+  const body = req.body as { folder?: string; path?: string }
+  const folder = body.folder ?? body.path
   if (!folder || !existsSync(folder)) return res.status(400).json({ error: 'folder not found' })
-  const count = await scanFolder(folder)
-  res.json({ indexed: count })
+  try {
+    const count = await scanFolder(folder)
+    res.json({ indexed: count })
+  } catch (e) {
+    res.status(500).json({ error: String(e) })
+  }
 })
 
 // Upload individual file(s)
@@ -52,15 +55,74 @@ router.post('/library/upload', upload.array('files'), async (req, res) => {
     const parts = f.originalname.replace(/\.[^.]+$/, '').split(' - ')
     const artist = parts.length > 1 ? parts[0].trim() : 'Unknown'
     const title = parts.length > 1 ? parts.slice(1).join(' - ').trim() : f.originalname
-    const song = addSong({ title, artist, duration: 0, source: 'upload', audio_path: f.path, video_path: null, cdg_path: null, lrc_path: null, subtitle_path: null, cover_url: null, format: 'lrc' })
+    const song = addSong({ title, artist, duration: 0, source: 'upload', audio_path: f.path, video_path: null, cdg_path: null, lrc_path: null, subtitle_path: null, cover_url: null, format: 'mp3' })
     added.push(song.id)
   }
   res.json({ added })
 })
 
-// ── Media streaming ────────────────────────────────────────────────────────────
+// ── Online search ──────────────────────────────────────────────────────────────
 
-router.get('/media/:songId/:type', (req, res) => {
+router.get('/sources/youtube', async (req, res) => {
+  const q = req.query.q as string
+  if (!q) return res.status(400).json({ error: 'q required' })
+  try { res.json(await searchYoutube(q)) }
+  catch (e) { res.status(500).json({ error: String(e) }) }
+})
+
+router.post('/sources/youtube/download', async (req, res) => {
+  const { url, title } = req.body as { url: string; title: string }
+  const dir = join(DATA_DIR, 'downloads')
+  try {
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    const path = await downloadYoutube(url, title, dir, pct => {
+      res.write(`data: ${JSON.stringify({ percent: pct })}\n\n`)
+    })
+    res.write(`data: ${JSON.stringify({ done: true, path })}\n\n`)
+    res.end()
+  } catch (e) {
+    res.write(`data: ${JSON.stringify({ error: String(e) })}\n\n`)
+    res.end()
+  }
+})
+
+router.get('/sources/usdb', async (req, res) => {
+  const q = req.query.q as string
+  if (!q) return res.status(400).json({ error: 'q required' })
+  try { res.json(await searchUSDB(q)) }
+  catch (e) { res.status(500).json({ error: String(e) }) }
+})
+
+// ── QR / info ──────────────────────────────────────────────────────────────────
+
+router.get('/info', (req, res) => {
+  const host = req.hostname
+  res.json({ host, port: req.socket.localPort, version: '2.0.0' })
+})
+
+// ── Media streaming (mounted at /media, NOT under /api) ───────────────────────
+
+const mediaRouter: IRouter = Router()
+
+// Must be declared before /:songId/:type or "lrc-data" is captured as a :type
+mediaRouter.get('/:songId/lrc-data', (req, res) => {
+  const song = getSong(req.params.songId)
+  if (!song) return res.status(404).end()
+  if (song.lrc_path && existsSync(song.lrc_path)) {
+    return res.json({ type: 'lrc', content: readFileSync(song.lrc_path, 'utf8') })
+  }
+  if (song.subtitle_path && existsSync(song.subtitle_path)) {
+    const raw = readFileSync(song.subtitle_path, 'utf8')
+    if (song.subtitle_path.endsWith('.ksc')) {
+      return res.json({ type: 'ksc', lines: parseKsc(raw) })
+    }
+    return res.json({ type: 'ass', content: raw })
+  }
+  res.status(404).json({ error: 'no lyrics' })
+})
+
+mediaRouter.get('/:songId/:type', (req, res) => {
   const song = getSong(req.params.songId)
   if (!song) return res.status(404).end()
 
@@ -93,70 +155,18 @@ router.get('/media/:songId/:type', (req, res) => {
   }
 })
 
-router.get('/media/:songId/lrc-data', (req, res) => {
-  const song = getSong(req.params.songId)
-  if (!song) return res.status(404).end()
-  if (song.lrc_path && existsSync(song.lrc_path)) {
-    return res.json({ type: 'lrc', content: readFileSync(song.lrc_path, 'utf8') })
-  }
-  if (song.subtitle_path && existsSync(song.subtitle_path)) {
-    const raw = readFileSync(song.subtitle_path, 'utf8')
-    if (song.subtitle_path.endsWith('.ksc')) {
-      return res.json({ type: 'ksc', lines: parseKsc(raw) })
-    }
-    return res.json({ type: 'ass', content: raw })
-  }
-  res.status(404).json({ error: 'no lyrics' })
-})
-
-// ── Online search ──────────────────────────────────────────────────────────────
-
-router.get('/sources/youtube', async (req, res) => {
-  const q = req.query.q as string
-  if (!q) return res.status(400).json({ error: 'q required' })
-  try { res.json(await searchYoutube(q)) }
-  catch (e) { res.status(500).json({ error: String(e) }) }
-})
-
-router.post('/sources/youtube/download', async (req, res) => {
-  const { url, title } = req.body as { url: string; title: string }
-  const dir = join(process.cwd(), '.kara-data', 'downloads')
-  try {
-    res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-cache')
-    const path = await downloadYoutube(url, title, dir, pct => {
-      res.write(`data: ${JSON.stringify({ percent: pct })}\n\n`)
-    })
-    res.write(`data: ${JSON.stringify({ done: true, path })}\n\n`)
-    res.end()
-  } catch (e) {
-    res.write(`data: ${JSON.stringify({ error: String(e) })}\n\n`)
-    res.end()
-  }
-})
-
-router.get('/sources/usdb', async (req, res) => {
-  const q = req.query.q as string
-  if (!q) return res.status(400).json({ error: 'q required' })
-  try { res.json(await searchUSDB(q)) }
-  catch (e) { res.status(500).json({ error: String(e) }) }
-})
-
-// ── QR / info ──────────────────────────────────────────────────────────────────
-
-router.get('/info', (req, res) => {
-  const host = req.hostname
-  res.json({ host, port: req.socket.localPort, version: '2.0.0' })
-})
-
 function mimeFor(p: string): string {
   if (p.endsWith('.mp3')) return 'audio/mpeg'
   if (p.endsWith('.m4a')) return 'audio/mp4'
   if (p.endsWith('.ogg')) return 'audio/ogg'
+  if (p.endsWith('.wav')) return 'audio/wav'
+  if (p.endsWith('.flac')) return 'audio/flac'
+  if (p.endsWith('.webm')) return 'video/webm'
   if (p.endsWith('.mkv')) return 'video/x-matroska'
   if (p.endsWith('.mp4')) return 'video/mp4'
-  if (p.endsWith('.cdg')) return 'application/octet-stream'
+  if (p.endsWith('.lrc') || p.endsWith('.ass') || p.endsWith('.ksc')) return 'text/plain; charset=utf-8'
   return 'application/octet-stream'
 }
 
 export default router
+export { mediaRouter }

@@ -7,6 +7,7 @@ interface Props {
   songId: string | null
   format: string
   positionMs: number
+  durationMs: number
   isPlaying: boolean
   cdgPlayer: CDGPlayer | null
   lrcLines: LyricsLine[]
@@ -18,7 +19,7 @@ interface Props {
   singerName: string
 }
 
-export default function Player({ songId, format, positionMs, isPlaying, cdgPlayer, lrcLines, loading, onEnded, onSeek, onPlayPause, audioRef, singerName }: Props) {
+export default function Player({ songId, format, positionMs, durationMs, isPlaying, cdgPlayer, lrcLines, loading, onEnded, onSeek, onPlayPause, audioRef, singerName }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   // CDG rendering
@@ -98,14 +99,24 @@ export default function Player({ songId, format, positionMs, isPlaying, cdgPlaye
       </div>
 
       <div style={{ padding: '10px 20px', background: '#0f0f0f', borderTop: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={onPlayPause} style={ctrlBtn}>{isPlaying ? '⏸' : '▶'}</button>
-        <input type="range" min={0} max={10000} value={positionMs}
+        <button onClick={onPlayPause} style={ctrlBtn} disabled={!songId}>{isPlaying ? '⏸' : '▶'}</button>
+        <span style={timeSt}>{fmtTime(positionMs)}</span>
+        <input type="range" min={0} max={Math.max(durationMs, positionMs, 1)} value={positionMs}
           onChange={e => onSeek(Number(e.target.value))}
+          disabled={!songId}
           style={{ flex: 1, accentColor: '#e05' }} />
+        <span style={timeSt}>{durationMs > 0 ? fmtTime(durationMs) : '--:--'}</span>
       </div>
     </div>
   )
 }
+
+function fmtTime(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+const timeSt: React.CSSProperties = { fontSize: 11, color: '#555', fontVariantNumeric: 'tabular-nums', minWidth: 34, textAlign: 'center' }
 
 const ctrlBtn: React.CSSProperties = {
   background: '#e05', border: 'none', color: '#fff',

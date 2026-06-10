@@ -23,6 +23,7 @@ export default function Library({ onAdd, singerName }: Props) {
   const [ytResults, setYtResults] = useState<YTResult[]>([])
   const [usdbResults, setUsdbResults] = useState<USDBResult[]>([])
   const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState('')
   const [dlProgress, setDlProgress] = useState<Map<string, number>>(new Map())
 
   const refreshLocal = useCallback(async (q?: string, artistId?: string | null) => {
@@ -45,40 +46,53 @@ export default function Library({ onAdd, singerName }: Props) {
   const searchOnline = async () => {
     if (!query.trim()) return
     setSearching(true)
+    setSearchError('')
     try {
       if (tab === 'youtube') {
         const r = await fetch(`/api/sources/youtube?q=${encodeURIComponent(query)}`)
-        setYtResults(await r.json())
+        const data = await r.json()
+        if (Array.isArray(data)) setYtResults(data)
+        else { setYtResults([]); setSearchError(data.error ?? 'YouTube search failed — is yt-dlp installed on the server?') }
       } else if (tab === 'usdb') {
         const r = await fetch(`/api/sources/usdb?q=${encodeURIComponent(query)}`)
-        setUsdbResults(await r.json())
+        const data = await r.json()
+        if (Array.isArray(data)) {
+          setUsdbResults(data)
+          if (data.length === 0) setSearchError('No USDB results (usdb.eu may be unreachable)')
+        } else { setUsdbResults([]); setSearchError(data.error ?? 'USDB search failed') }
       }
-    } finally { setSearching(false) }
+    } catch { setSearchError('Network error') }
+    finally { setSearching(false) }
   }
 
   const downloadYT = async (r: YTResult) => {
     setDlProgress(p => new Map(p).set(r.url, 0))
-    const evtSource = new EventSource(`/api/sources/youtube/download?url=${encodeURIComponent(r.url)}&title=${encodeURIComponent(r.title)}`)
-    // actually the route is POST — use fetch + SSE
-    const resp = await fetch('/api/sources/youtube/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: r.url, title: r.title }),
-    })
-    const reader = resp.body!.getReader()
-    const dec = new TextDecoder()
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      const text = dec.decode(value)
-      for (const line of text.split('\n')) {
-        if (line.startsWith('data:')) {
-          const d = JSON.parse(line.slice(5))
-          if (d.percent !== undefined) setDlProgress(p => new Map(p).set(r.url, d.percent))
-          if (d.done) { refreshLocal(); refreshArtists() }
+    try {
+      const resp = await fetch('/api/sources/youtube/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: r.url, title: r.title }),
+      })
+      const reader = resp.body!.getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? '' // keep incomplete line for the next chunk
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue
+          try {
+            const d = JSON.parse(line.slice(5))
+            if (d.percent !== undefined) setDlProgress(p => new Map(p).set(r.url, d.percent))
+            if (d.done) { refreshLocal(); refreshArtists() }
+            if (d.error) setSearchError(d.error)
+          } catch { /* partial JSON — ignore */ }
         }
       }
-    }
+    } catch { setSearchError('Download failed') }
     setDlProgress(p => { const m = new Map(p); m.delete(r.url); return m })
   }
 
@@ -122,6 +136,12 @@ export default function Library({ onAdd, singerName }: Props) {
             </button>
           )}
         </div>
+
+        {searchError && tab !== 'local' && (
+          <div style={{ padding: '8px 14px', fontSize: 12, color: '#c66', background: '#1a0d0d', borderBottom: '1px solid #2a1414' }}>
+            {searchError}
+          </div>
+        )}
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {/* Local songs */}

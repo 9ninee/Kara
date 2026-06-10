@@ -3,7 +3,7 @@ import { join } from 'path'
 import { mkdirSync } from 'fs'
 import { randomUUID } from 'crypto'
 
-const DATA_DIR = process.env.KARA_DATA ?? join(process.cwd(), '.kara-data')
+export const DATA_DIR = process.env.KARA_DATA ?? join(process.cwd(), '.kara-data')
 mkdirSync(DATA_DIR, { recursive: true })
 
 const db = new DatabaseSync(join(DATA_DIR, 'library.db'))
@@ -95,6 +95,14 @@ export function getSong(id: string): Song | null {
     LEFT JOIN artists a ON s.artist_id = a.id
     WHERE s.id = ?
   `).get(id) as unknown as Song | null
+}
+
+export function getSongByPath(path: string): Song | null {
+  return db.prepare(`
+    SELECT s.*, a.name AS artist FROM songs s
+    LEFT JOIN artists a ON s.artist_id = a.id
+    WHERE s.audio_path = ? OR s.video_path = ?
+  `).get(path, path) as unknown as Song | null
 }
 
 export function searchSongs(query?: string): Song[] {

@@ -1,8 +1,8 @@
 import { watch } from 'chokidar'
-import { readdirSync, statSync } from 'fs'
+import { readdirSync, statSync, existsSync } from 'fs'
 import { basename, extname, join, dirname } from 'path'
-import { addSong } from './database.js'
-import { extractMkv } from '../formats/mkv.js'
+import { addSong, getSongByPath } from './database.js'
+import { extractMkv, probeMediaDuration } from '../formats/mkv.js'
 
 const AUDIO_EXT = new Set(['.mp3', '.m4a', '.ogg', '.flac', '.wav'])
 const VIDEO_EXT = new Set(['.mkv', '.mp4', '.webm'])
@@ -15,40 +15,49 @@ function parseName(filename: string): { title: string; artist: string } {
   return { artist: 'Unknown', title: base.trim() }
 }
 
-async function indexFile(filePath: string): Promise<void> {
+// Returns true if a new song was indexed
+async function indexFile(filePath: string): Promise<boolean> {
   const ext = extname(filePath).toLowerCase()
   const dir = dirname(filePath)
   const base = basename(filePath, ext)
 
   if (AUDIO_EXT.has(ext)) {
+    if (getSongByPath(filePath)) return false
+    // Audio extracted from a sibling MKV is owned by the MKV entry
+    if (existsSync(join(dir, base + '.mkv'))) return false
     const cdgPath = join(dir, base + CDG_EXT)
     const lrcPath = join(dir, base + '.lrc')
+    const kscPath = join(dir, base + '.ksc')
     const { title, artist } = parseName(filePath)
+    const duration = await probeMediaDuration(filePath)
     try {
       addSong({
         title,
         artist,
-        duration: 0,
+        duration,
         source: 'local',
         audio_path: filePath,
         video_path: null,
-        cdg_path: cdgPath && require('fs').existsSync(cdgPath) ? cdgPath : null,
-        lrc_path: lrcPath && require('fs').existsSync(lrcPath) ? lrcPath : null,
-        subtitle_path: null,
+        cdg_path: existsSync(cdgPath) ? cdgPath : null,
+        lrc_path: existsSync(lrcPath) ? lrcPath : null,
+        subtitle_path: existsSync(kscPath) ? kscPath : null,
         cover_url: null,
-        format: require('fs').existsSync(cdgPath) ? 'cdg' : 'lrc',
+        format: existsSync(cdgPath) ? 'cdg' : 'lrc',
       })
-    } catch { /* already indexed */ }
+      return true
+    } catch { return false }
   }
 
   if (ext === '.mkv') {
+    if (getSongByPath(filePath)) return false
     const { title, artist } = parseName(filePath)
     try {
       const { audioPath, subtitlePath } = await extractMkv(filePath)
+      const duration = await probeMediaDuration(audioPath)
       addSong({
         title,
         artist,
-        duration: 0,
+        duration,
         source: 'local',
         audio_path: audioPath,
         video_path: filePath,
@@ -58,8 +67,11 @@ async function indexFile(filePath: string): Promise<void> {
         cover_url: null,
         format: 'mkv',
       })
-    } catch { /* ffmpeg not available or already indexed */ }
+      return true
+    } catch { return false } // ffmpeg not available or already indexed
   }
+
+  return false
 }
 
 export async function scanFolder(folderPath: string): Promise<number> {
@@ -71,8 +83,7 @@ export async function scanFolder(folderPath: string): Promise<number> {
       if (stat.isDirectory()) { await recurse(full); continue }
       const ext = extname(entry).toLowerCase()
       if (AUDIO_EXT.has(ext) || VIDEO_EXT.has(ext)) {
-        await indexFile(full)
-        count++
+        if (await indexFile(full)) count++
       }
     }
   }
@@ -81,5 +92,5 @@ export async function scanFolder(folderPath: string): Promise<number> {
 }
 
 export function watchFolder(folderPath: string): void {
-  watch(folderPath, { ignoreInitial: false, depth: 10 }).on('add', (p) => indexFile(p))
+  watch(folderPath, { ignoreInitial: true, depth: 10 }).on('add', (p) => { void indexFile(p) })
 }
