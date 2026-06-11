@@ -3,12 +3,13 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { initDatabase } from './library/database'
 import { startPartyServer, stopPartyServer } from './server/partyServer'
+import { startMediaServer, stopMediaServer } from './server/mediaServer'
 import { registerAudioHandlers } from './audio/deviceManager'
 import { registerLibraryHandlers } from './library/database'
 import { registerProviderHandlers } from './providers/youtube'
 import { registerCastingHandlers } from './casting/chromecast'
+import { registerKaraokeApiHandlers } from './providers/karaokeApi'
 
-// Must be called before app.whenReady()
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'kara',
@@ -32,9 +33,7 @@ function createWindow(): void {
     },
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow!.show()
-  })
+  mainWindow.on('ready-to-show', () => mainWindow!.show())
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
@@ -49,21 +48,34 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
-  // Serve local files via kara://local/<absolute-path>
   protocol.handle('kara', (request) => {
     const filePath = request.url.slice('kara://local'.length)
     return net.fetch(`file://${filePath}`)
   })
 
   await initDatabase()
+  await startMediaServer()
 
   registerAudioHandlers(ipcMain)
   registerLibraryHandlers(ipcMain)
   registerProviderHandlers(ipcMain)
   registerCastingHandlers(ipcMain)
+  registerKaraokeApiHandlers(ipcMain)
 
-  ipcMain.handle('dialog:open', (_e, options: Electron.OpenDialogOptions) => {
-    return dialog.showOpenDialog(mainWindow!, options)
+  ipcMain.handle('dialog:open', (_e, options: Electron.OpenDialogOptions) =>
+    dialog.showOpenDialog(mainWindow!, options),
+  )
+
+  ipcMain.handle('party:start', async () => {
+    const result = await startPartyServer((queue) => {
+      mainWindow?.webContents.send('queue:updated', queue)
+    })
+    return result
+  })
+
+  ipcMain.handle('party:stop', async () => {
+    await stopPartyServer()
+    mainWindow?.webContents.send('queue:updated', { items: [], nowPlaying: null, history: [] })
   })
 
   createWindow()
@@ -75,13 +87,6 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', async () => {
   await stopPartyServer()
+  stopMediaServer()
   if (process.platform !== 'darwin') app.quit()
-})
-
-ipcMain.handle('party:start', async () => {
-  return startPartyServer()
-})
-
-ipcMain.handle('party:stop', async () => {
-  return stopPartyServer()
 })

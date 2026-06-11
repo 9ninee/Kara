@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-/** Convert an absolute local path to a kara:// URL the renderer can fetch */
 function getLocalFileUrl(absPath: string): string {
   const normalized = absPath.replace(/\\/g, '/')
   return `kara://local${normalized.startsWith('/') ? normalized : '/' + normalized}`
@@ -21,30 +20,42 @@ const api = {
 
   // File system
   getLocalFileUrl,
-  showOpenDialog: (options: { title?: string; filters?: { name: string; extensions: string[] }[]; properties?: string[] }) =>
-    ipcRenderer.invoke('dialog:open', options),
+  showOpenDialog: (options: {
+    title?: string
+    filters?: { name: string; extensions: string[] }[]
+    properties?: string[]
+  }) => ipcRenderer.invoke('dialog:open', options),
 
-  // Providers
+  // Providers: YouTube
   searchYoutube: (query: string) => ipcRenderer.invoke('provider:youtube-search', query),
   downloadYoutube: (url: string, title: string) =>
     ipcRenderer.invoke('provider:youtube-download', url, title),
 
-  // Casting
+  // Providers: Karaoke API
+  configureKaraokeApi: (baseUrl: string, apiKey: string, name?: string) =>
+    ipcRenderer.invoke('karaoke-api:configure', baseUrl, apiKey, name),
+  searchKaraokeApi: (query: string) => ipcRenderer.invoke('karaoke-api:search', query),
+  getKaraokeApiStatus: () => ipcRenderer.invoke('karaoke-api:status'),
+
+  // Casting: Chromecast
   discoverChromecast: () => ipcRenderer.invoke('cast:discover-chromecast'),
-  castToChromecast: (deviceId: string, mediaUrl: string) =>
-    ipcRenderer.invoke('cast:connect-chromecast', deviceId, mediaUrl),
+  castToChromecast: (device: unknown, filePath: string) =>
+    ipcRenderer.invoke('cast:connect-chromecast', device, filePath),
+  castPause: () => ipcRenderer.invoke('cast:pause'),
+  castResume: () => ipcRenderer.invoke('cast:resume'),
+  castSeek: (secs: number) => ipcRenderer.invoke('cast:seek', secs),
   stopCasting: () => ipcRenderer.invoke('cast:stop'),
+  getCastStatus: () => ipcRenderer.invoke('cast:status'),
 
   // Party mode
-  startParty: () => ipcRenderer.invoke('party:start'),
+  startParty: () => ipcRenderer.invoke('party:start') as Promise<{ sessionId: string; port: number; qrDataUrl: string }>,
   stopParty: () => ipcRenderer.invoke('party:stop'),
 
-  // Event listeners
+  // IPC event listeners (main → renderer push events)
   on: (channel: string, callback: (...args: unknown[]) => void) => {
-    ipcRenderer.on(channel, (_event, ...args) => callback(...args))
-  },
-  off: (channel: string, callback: (...args: unknown[]) => void) => {
-    ipcRenderer.removeListener(channel, (_event, ...args) => callback(...args))
+    const wrapped = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args)
+    ipcRenderer.on(channel, wrapped)
+    return () => ipcRenderer.removeListener(channel, wrapped)
   },
 }
 
