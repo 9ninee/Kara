@@ -19,6 +19,7 @@ export default function DevicePicker({
     navigator.mediaDevices
       .enumerateDevices()
       .then((all) => setDevices(all.filter((d) => d.kind === type)))
+      .catch((err: unknown) => console.warn('[DevicePicker] enumerateDevices failed', err))
   }, [type])
 
   return (

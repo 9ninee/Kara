@@ -2,6 +2,13 @@ import React, { useEffect, useState, useCallback } from 'react'
 import type { Song } from '@kara/shared'
 import { useAppContext } from '../context/AppContext'
 
+interface ChromecastDeviceInfo {
+  id: string
+  name: string
+  host: string
+  port: number
+}
+
 declare global {
   interface Window {
     api: {
@@ -19,10 +26,18 @@ declare global {
       downloadYoutube: (url: string, title: string) => Promise<string>
       setOutputDevice: (id: string) => Promise<unknown>
       setInputDevice: (id: string) => Promise<unknown>
-      discoverChromecast: () => Promise<unknown[]>
-      castToChromecast: (d: unknown, url: string) => Promise<unknown>
-      startParty: () => Promise<{ sessionId: string; port: number }>
+      discoverChromecast: () => Promise<ChromecastDeviceInfo[]>
+      castToChromecast: (d: ChromecastDeviceInfo, url: string) => Promise<{ success: boolean; error?: string }>
+      castPause: () => Promise<void>
+      castResume: () => Promise<void>
+      castSeek: (secs: number) => Promise<void>
+      stopCasting: () => Promise<void>
+      getCastStatus: () => Promise<{ connected: boolean; device: ChromecastDeviceInfo | null }>
+      startParty: () => Promise<{ sessionId: string; port: number; qrDataUrl: string }>
       stopParty: () => Promise<void>
+      on: (channel: string, cb: (...args: unknown[]) => void) => () => void
+      configureKaraokeApi: (baseUrl: string, apiKey: string, name: string) => Promise<{ success: boolean }>
+      getKaraokeApiStatus: () => Promise<{ configured: boolean; name: string | null }>
     }
   }
 }
@@ -44,7 +59,9 @@ export default function Library(): React.ReactElement {
   const [searching, setSearching] = useState(false)
 
   const refresh = useCallback((q?: string) => {
-    window.api.getSongs(q).then(setSongs)
+    window.api.getSongs(q)
+      .then(setSongs)
+      .catch((err: unknown) => console.warn('[Library] getSongs failed', err))
   }, [])
 
   useEffect(() => {
@@ -154,7 +171,9 @@ export default function Library(): React.ReactElement {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      window.api.deleteSong(song.id).then(() => refresh())
+                      window.api.deleteSong(song.id)
+                        .then(() => refresh())
+                        .catch((err: unknown) => console.warn('[Library] deleteSong failed', err))
                     }}
                     style={{ background: 'transparent', border: 'none', color: '#c55', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
                   >
@@ -204,7 +223,9 @@ export default function Library(): React.ReactElement {
                 <div style={{ fontSize: 11, color: '#666' }}>{r.uploader}</div>
               </div>
               <button
-                onClick={() => window.api.downloadYoutube(r.url, r.title).then(() => refresh())}
+                onClick={() => window.api.downloadYoutube(r.url, r.title)
+                  .then(() => refresh())
+                  .catch((err: unknown) => console.warn('[Library] downloadYoutube failed', err))}
                 style={{ ...btnSmall, fontSize: 12, flexShrink: 0 }}
               >
                 ↓

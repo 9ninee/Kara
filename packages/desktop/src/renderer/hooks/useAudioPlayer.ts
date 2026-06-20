@@ -146,11 +146,16 @@ export function useAudioPlayer(): AudioPlayer {
     const ctx = getContext()
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop())
+      micStreamRef.current = null
     }
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId } })
-    micStreamRef.current = stream
-    const src = ctx.createMediaStreamSource(stream)
-    src.connect(micGainRef.current!)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId } })
+      micStreamRef.current = stream
+      const src = ctx.createMediaStreamSource(stream)
+      src.connect(micGainRef.current!)
+    } catch (err: unknown) {
+      console.warn('[useAudioPlayer] setInputDevice failed', err)
+    }
   }, [])
 
   useEffect(() => () => cancelAnimationFrame(rafRef.current), [])

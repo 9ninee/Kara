@@ -8,14 +8,22 @@ export default function Queue(): React.ReactElement {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
 
   const startParty = useCallback(async () => {
-    const result = await (window as any).api.startParty() as { sessionId: string; port: number; qrDataUrl: string }
-    setPartyActive(true)
-    setSessionId(result.sessionId)
-    setQrDataUrl(result.qrDataUrl || null)
+    try {
+      const result = await window.api.startParty()
+      setPartyActive(true)
+      setSessionId(result.sessionId)
+      setQrDataUrl(result.qrDataUrl || null)
+    } catch (err: unknown) {
+      console.error('[Queue] startParty failed', err)
+    }
   }, [])
 
   const stopParty = useCallback(async () => {
-    await (window as any).api.stopParty()
+    try {
+      await window.api.stopParty()
+    } catch (err: unknown) {
+      console.error('[Queue] stopParty failed', err)
+    }
     setPartyActive(false)
     setSessionId(null)
     setQrDataUrl(null)
@@ -24,10 +32,10 @@ export default function Queue(): React.ReactElement {
 
   // Subscribe to real-time queue updates pushed from the main process
   useEffect(() => {
-    const unsub = (window as any).api.on('queue:updated', (q: QueueState) => {
-      setQueue(q)
+    const unsub = window.api.on('queue:updated', (q) => {
+      setQueue(q as QueueState)
     })
-    return () => { typeof unsub === 'function' && unsub() }
+    return () => { unsub() }
   }, [])
 
   return (

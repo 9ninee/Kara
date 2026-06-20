@@ -18,16 +18,21 @@ export function useMic(): MicControls {
   const [state, setState] = useState<MicState>({ isActive: false, volume: 0.8 })
 
   const start = useCallback(async () => {
-    await Audio.requestPermissionsAsync()
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-    })
-    const { recording } = await Audio.Recording.createAsync(
-      Audio.RecordingOptionsPresets.HIGH_QUALITY,
-    )
-    recordingRef.current = recording
-    setState((s) => ({ ...s, isActive: true }))
+    const { granted } = await Audio.requestPermissionsAsync()
+    if (!granted) return
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      })
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      )
+      recordingRef.current = recording
+      setState((s) => ({ ...s, isActive: true }))
+    } catch (err: unknown) {
+      console.warn('[useMic] start failed', err)
+    }
   }, [])
 
   const stop = useCallback(async () => {

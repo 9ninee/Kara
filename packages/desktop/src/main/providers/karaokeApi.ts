@@ -32,8 +32,9 @@ function fetchJson(url: string): Promise<unknown> {
       res.on('data', (chunk: string) => { body += chunk })
       res.on('end', () => {
         try { resolve(JSON.parse(body)) }
-        catch (e) { reject(e) }
+        catch (e: unknown) { reject(e) }
       })
+      res.on('error', reject)
     })
     req.on('error', reject)
     req.end()

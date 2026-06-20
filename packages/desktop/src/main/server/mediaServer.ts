@@ -1,10 +1,14 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http'
-import { createReadStream, statSync, existsSync } from 'fs'
+import { createReadStream, statSync } from 'fs'
 import { extname } from 'path'
 import { networkInterfaces } from 'os'
+import { randomUUID } from 'crypto'
 
 const MEDIA_PORT = 3001
 let server: ReturnType<typeof createServer> | null = null
+
+// Token map prevents path traversal — only explicitly registered files are served
+const tokenMap = new Map<string, string>()
 
 function mimeFor(p: string): string {
   const ext = extname(p).toLowerCase()
@@ -31,21 +35,30 @@ function getLocalIP(): string {
 }
 
 function handleRequest(req: IncomingMessage, res: ServerResponse): void {
-  // URL: /file/<encoded-absolute-path>
-  if (!req.url?.startsWith('/file/')) {
+  // URL: /media/<token>
+  if (!req.url?.startsWith('/media/')) {
     res.writeHead(404)
     res.end()
     return
   }
 
-  const filePath = decodeURIComponent(req.url.slice('/file/'.length - 1))
-  if (!existsSync(filePath)) {
+  const token = req.url.slice('/media/'.length)
+  const filePath = tokenMap.get(token)
+  if (!filePath) {
     res.writeHead(404)
     res.end()
     return
   }
 
-  const stat = statSync(filePath)
+  let stat: ReturnType<typeof statSync>
+  try {
+    stat = statSync(filePath)
+  } catch {
+    res.writeHead(404)
+    res.end()
+    return
+  }
+
   const range = req.headers['range']
 
   const headers: Record<string, string | number> = {
@@ -58,6 +71,11 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
     const [startStr, endStr] = range.replace('bytes=', '').split('-')
     const start = parseInt(startStr, 10)
     const end = endStr ? parseInt(endStr, 10) : stat.size - 1
+    if (isNaN(start) || isNaN(end) || start > end || end >= stat.size) {
+      res.writeHead(416, { 'Content-Range': `bytes */${stat.size}` })
+      res.end()
+      return
+    }
     res.writeHead(206, {
       ...headers,
       'Content-Range': `bytes ${start}-${end}/${stat.size}`,
@@ -74,7 +92,14 @@ export function startMediaServer(): Promise<{ port: number; getUrl: (filePath: s
   return new Promise((resolve, reject) => {
     if (server) {
       const ip = getLocalIP()
-      resolve({ port: MEDIA_PORT, getUrl: (p) => `http://${ip}:${MEDIA_PORT}/file${encodeURIComponent(p)}` })
+      resolve({
+        port: MEDIA_PORT,
+        getUrl: (p) => {
+          const token = randomUUID()
+          tokenMap.set(token, p)
+          return `http://${ip}:${MEDIA_PORT}/media/${token}`
+        },
+      })
       return
     }
 
@@ -83,7 +108,11 @@ export function startMediaServer(): Promise<{ port: number; getUrl: (filePath: s
       const ip = getLocalIP()
       resolve({
         port: MEDIA_PORT,
-        getUrl: (filePath: string) => `http://${ip}:${MEDIA_PORT}/file${encodeURIComponent(filePath)}`,
+        getUrl: (filePath: string) => {
+          const token = randomUUID()
+          tokenMap.set(token, filePath)
+          return `http://${ip}:${MEDIA_PORT}/media/${token}`
+        },
       })
     })
     server.on('error', reject)
@@ -93,4 +122,5 @@ export function startMediaServer(): Promise<{ port: number; getUrl: (filePath: s
 export function stopMediaServer(): void {
   server?.close()
   server = null
+  tokenMap.clear()
 }

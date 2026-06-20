@@ -2,23 +2,16 @@ import React, { useState, useEffect } from 'react'
 import DevicePicker from '../components/DevicePicker'
 import { useAudioPlayer } from '../hooks/useAudioPlayer'
 
-interface ChromecastDevice {
-  id: string
-  name: string
-  host: string
-  port: number
-}
-
 export default function Settings(): React.ReactElement {
   const player = useAudioPlayer()
   const [outputDevice, setOutputDevice] = useState('')
   const [inputDevice, setInputDevice] = useState('')
 
   // Chromecast state
-  const [chromecasts, setChromecasts] = useState<ChromecastDevice[]>([])
+  const [chromecasts, setChromecasts] = useState<Window['api'] extends { discoverChromecast: () => Promise<infer T> } ? T : never>([])
   const [scanning, setScanning] = useState(false)
   const [castConnected, setCastConnected] = useState(false)
-  const [castDevice, setCastDevice] = useState<ChromecastDevice | null>(null)
+  const [castDevice, setCastDevice] = useState<Awaited<ReturnType<Window['api']['getCastStatus']>>['device']>(null)
   const [castStatus, setCastStatus] = useState('')
 
   // Karaoke API state
@@ -29,55 +22,77 @@ export default function Settings(): React.ReactElement {
   const [apiSaving, setApiSaving] = useState(false)
 
   useEffect(() => {
-    // Load cast status on mount
-    ;(window as any).api.getCastStatus().then((s: { connected: boolean; device: ChromecastDevice | null }) => {
-      setCastConnected(s.connected)
-      setCastDevice(s.device ?? null)
-    })
-    // Load API status
-    ;(window as any).api.getKaraokeApiStatus().then((s: { configured: boolean; name: string | null }) => {
-      setApiConfigured(s.configured)
-      if (s.name) setApiName(s.name)
-    })
+    window.api.getCastStatus()
+      .then((s) => {
+        setCastConnected(s.connected)
+        setCastDevice(s.device)
+      })
+      .catch((err: unknown) => console.warn('[Settings] getCastStatus failed', err))
+
+    window.api.getKaraokeApiStatus()
+      .then((s) => {
+        setApiConfigured(s.configured)
+        if (s.name) setApiName(s.name)
+      })
+      .catch((err: unknown) => console.warn('[Settings] getKaraokeApiStatus failed', err))
   }, [])
 
   const applyOutput = async (id: string) => {
     setOutputDevice(id)
-    if (id) await player.setOutputDevice(id)
-    await (window as any).api.setOutputDevice(id)
+    try {
+      if (id) await player.setOutputDevice(id)
+      await window.api.setOutputDevice(id)
+    } catch (err: unknown) {
+      console.warn('[Settings] setOutputDevice failed', err)
+    }
   }
 
   const applyInput = async (id: string) => {
     setInputDevice(id)
-    if (id) await player.setInputDevice(id)
-    await (window as any).api.setInputDevice(id)
+    try {
+      if (id) await player.setInputDevice(id)
+      await window.api.setInputDevice(id)
+    } catch (err: unknown) {
+      console.warn('[Settings] setInputDevice failed', err)
+    }
   }
 
   const scanChromecast = async () => {
     setScanning(true)
     try {
-      const devices: ChromecastDevice[] = await (window as any).api.discoverChromecast()
+      const devices = await window.api.discoverChromecast()
       setChromecasts(devices)
       if (devices.length === 0) setCastStatus('No Chromecast devices found.')
+    } catch (err: unknown) {
+      setCastStatus(`Scan failed: ${String(err)}`)
     } finally {
       setScanning(false)
     }
   }
 
-  const castTo = async (device: ChromecastDevice) => {
+  const castTo = async (device: NonNullable<typeof castDevice>) => {
+    if (!device) return
     setCastStatus(`Connecting to ${device.name}…`)
-    const result = await (window as any).api.castToChromecast(device, '') as { success: boolean; error?: string }
-    if (result.success) {
-      setCastConnected(true)
-      setCastDevice(device)
-      setCastStatus(`Casting to ${device.name}`)
-    } else {
-      setCastStatus(`Cast failed: ${result.error}`)
+    try {
+      const result = await window.api.castToChromecast(device, '')
+      if (result.success) {
+        setCastConnected(true)
+        setCastDevice(device)
+        setCastStatus(`Casting to ${device.name}`)
+      } else {
+        setCastStatus(`Cast failed: ${result.error}`)
+      }
+    } catch (err: unknown) {
+      setCastStatus(`Cast failed: ${String(err)}`)
     }
   }
 
   const stopCast = async () => {
-    await (window as any).api.stopCasting()
+    try {
+      await window.api.stopCasting()
+    } catch (err: unknown) {
+      console.warn('[Settings] stopCasting failed', err)
+    }
     setCastConnected(false)
     setCastDevice(null)
     setCastStatus('')
@@ -87,8 +102,10 @@ export default function Settings(): React.ReactElement {
     if (!apiBaseUrl.trim() || !apiKey.trim()) return
     setApiSaving(true)
     try {
-      await (window as any).api.configureKaraokeApi(apiBaseUrl.trim(), apiKey.trim(), apiName.trim() || 'Karaoke API')
+      await window.api.configureKaraokeApi(apiBaseUrl.trim(), apiKey.trim(), apiName.trim() || 'Karaoke API')
       setApiConfigured(true)
+    } catch (err: unknown) {
+      console.warn('[Settings] configureKaraokeApi failed', err)
     } finally {
       setApiSaving(false)
     }
@@ -132,8 +149,8 @@ export default function Settings(): React.ReactElement {
           <div style={{ background: '#0a1a0a', border: '1px solid #0a3a0a', borderRadius: 10, padding: 14, marginBottom: 12 }}>
             <div style={{ color: '#4f4', fontWeight: 600, marginBottom: 4 }}>Casting to {castDevice.name}</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => (window as any).api.castPause()} style={btnSmall}>Pause</button>
-              <button onClick={() => (window as any).api.castResume()} style={btnSmall}>Resume</button>
+              <button onClick={() => window.api.castPause().catch(() => undefined)} style={btnSmall}>Pause</button>
+              <button onClick={() => window.api.castResume().catch(() => undefined)} style={btnSmall}>Resume</button>
               <button onClick={stopCast} style={{ ...btnSmall, background: '#422' }}>Stop Cast</button>
             </div>
           </div>

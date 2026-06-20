@@ -167,9 +167,18 @@ export async function startPartyServer(
     })
 
     socket.on('disconnect', () => {
-      session!.participants = session!.participants.filter((p) => p.id !== socket.id)
-      io!.emit('session:participant-left', socket.id)
+      if (!session) return
+      session.participants = session.participants.filter((p) => p.id !== socket.id)
+      io?.emit('session:participant-left', socket.id)
     })
+
+    socket.on('error', (err) => {
+      console.error('[party] socket error', err)
+    })
+  })
+
+  io.on('error', (err) => {
+    console.error('[party] io error', err)
   })
 
   await new Promise<void>((resolve) => httpServer!.listen(PORT, resolve))
