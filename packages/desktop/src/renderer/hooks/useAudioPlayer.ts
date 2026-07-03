@@ -20,7 +20,9 @@ export interface AudioPlayer {
   setInputDevice: (deviceId: string) => Promise<void>
 }
 
-export function useAudioPlayer(): AudioPlayer {
+export function useAudioPlayer(onEnded?: () => void): AudioPlayer {
+  const onEndedRef = useRef(onEnded)
+  onEndedRef.current = onEnded
   const ctxRef = useRef<AudioContext | null>(null)
   const sourceRef = useRef<AudioBufferSourceNode | null>(null)
   const musicGainRef = useRef<GainNode | null>(null)
@@ -91,6 +93,7 @@ export function useAudioPlayer(): AudioPlayer {
         cancelAnimationFrame(rafRef.current)
         pausedAtRef.current = 0
         setState((s) => ({ ...s, isPlaying: false, currentTimeMs: s.durationMs }))
+        onEndedRef.current?.()
       }
     }
     sourceRef.current = src

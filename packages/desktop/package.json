@@ -2,7 +2,7 @@
   "name": "@kara/desktop",
   "version": "0.1.0",
   "private": true,
-  "main": "dist/main/index.js",
+  "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -26,7 +26,7 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.2.1",
-    "electron": "^30.0.6",
+    "electron": "^35.0.0",
     "electron-builder": "^24.13.3",
     "electron-rebuild": "^3.2.9",
     "electron-vite": "^2.2.0",

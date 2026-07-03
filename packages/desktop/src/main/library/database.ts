@@ -28,6 +28,20 @@ export async function initDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_songs_artist ON songs (artist);
     CREATE INDEX IF NOT EXISTS idx_songs_title ON songs (title);
   `)
+  try {
+    // Guard against double-imports; may fail on legacy DBs that already
+    // contain duplicates — those still work, just without the constraint.
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_songs_audio_path ON songs (audio_path)')
+  } catch (e: unknown) {
+    console.warn('[database] could not add unique audio_path index', e)
+  }
+}
+
+export function findSongByAudioPath(audioPath: string): Song | null {
+  const row = db.prepare('SELECT * FROM songs WHERE audio_path = ?').get(audioPath) as
+    | Record<string, unknown>
+    | undefined
+  return row ? rowToSong(row) : null
 }
 
 function rowToSong(row: Record<string, unknown>): Song {

@@ -52,6 +52,12 @@ export function AppProvider({ children }: { children: React.ReactNode }): React.
 
   const onStatus = useCallback((status: AVPlaybackStatus) => {
     if (!status.isLoaded) return
+    if (status.didJustFinish) {
+      // Song ended: rewind to the start so Play restarts cleanly
+      soundRef.current?.setPositionAsync(0).catch(() => undefined)
+      setState((s) => ({ ...s, isPlaying: false, currentTimeMs: 0 }))
+      return
+    }
     setState((s) => ({
       ...s,
       isPlaying: status.isPlaying,
@@ -93,8 +99,12 @@ export function AppProvider({ children }: { children: React.ReactNode }): React.
           lrcLines,
           loading: false,
         }))
-      } catch {
-        setState((s) => ({ ...s, loading: false }))
+      } catch (err: unknown) {
+        console.warn('[AppContext] playSong failed', err)
+        // Reset fully — a half-loaded song would leave Play pointing at the
+        // previous (already unloaded) sound
+        soundRef.current = null
+        setState((s) => ({ ...s, song: null, loading: false, isPlaying: false, lrcLines: [] }))
       }
     },
     [onStatus],

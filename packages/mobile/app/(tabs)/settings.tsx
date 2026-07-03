@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Switch } from 'react-native'
 import Slider from '@react-native-community/slider'
-import { useParty } from '../../hooks/useParty'
+import { useParty } from '../../context/PartyContext'
 import { useMic } from '../../hooks/useMic'
 import { useAppContext } from '../../context/AppContext'
 import { CastingButton } from '../../components/CastingButton'
+import { QRJoinScanner } from '../../components/QRJoinScanner'
 
 export default function SettingsScreen() {
   const { connect, connected, session, disconnect } = useParty()
@@ -12,6 +13,7 @@ export default function SettingsScreen() {
   const { setMicVolume, playerState } = useAppContext()
   const [hostIp, setHostIp] = useState('')
   const [name, setName] = useState('')
+  const [scanning, setScanning] = useState(false)
 
   const joinParty = async () => {
     if (!hostIp.trim() || !name.trim()) {
@@ -19,8 +21,17 @@ export default function SettingsScreen() {
       return
     }
     try {
-      await connect(`ws://${hostIp.trim()}:3000`, name.trim())
-    } catch (e) {
+      await connect(`http://${hostIp.trim()}:3000`, name.trim())
+    } catch (e: unknown) {
+      Alert.alert('Connection failed', String(e))
+    }
+  }
+
+  const joinFromQR = async (host: string, port: string) => {
+    setScanning(false)
+    try {
+      await connect(`http://${host}:${port}`, name.trim() || 'Guest')
+    } catch (e: unknown) {
       Alert.alert('Connection failed', String(e))
     }
   }
@@ -113,6 +124,18 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.joinBtn} onPress={joinParty}>
             <Text style={styles.joinBtnText}>Join Party</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.joinBtn, { backgroundColor: '#1a1a2a', marginTop: 8 }]}
+            onPress={() => setScanning(true)}
+          >
+            <Text style={[styles.joinBtnText, { color: '#4af' }]}>Scan QR Code</Text>
+          </TouchableOpacity>
+          {scanning && (
+            <QRJoinScanner
+              onJoin={joinFromQR}
+              onCancel={() => setScanning(false)}
+            />
+          )}
         </View>
       )}
 

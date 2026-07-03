@@ -3,7 +3,9 @@ import { execFile } from 'child_process'
 import { join } from 'path'
 import { app } from 'electron'
 import { promisify } from 'util'
-import { existsSync } from 'fs'
+import { existsSync, mkdirSync } from 'fs'
+import { insertSong } from '../library/database'
+import type { Song } from '@kara/shared'
 
 const execFileAsync = promisify(execFile)
 
@@ -42,18 +44,21 @@ export async function searchYoutube(query: string): Promise<YTSearchResult[]> {
         title: j.title,
         uploader: j.uploader ?? j.channel ?? 'Unknown',
         duration: j.duration ?? 0,
-        thumbnail: j.thumbnail ?? '',
+        // --flat-playlist exposes a thumbnails array, not a thumbnail string
+        thumbnail: j.thumbnail ?? j.thumbnails?.[0]?.url ?? '',
         url: `https://www.youtube.com/watch?v=${j.id}`,
       }
     })
 }
 
-export async function downloadYoutube(url: string, title: string): Promise<string> {
+export async function downloadYoutube(url: string, title: string): Promise<Song> {
   const ytDlp = getYtDlpPath()
   const outputDir = join(app.getPath('userData'), 'downloads')
+  mkdirSync(outputDir, { recursive: true })
   const outputTemplate = join(outputDir, '%(title)s.%(ext)s')
 
-  await execFileAsync(ytDlp, [
+  // --print after_move:filepath emits the final file path on stdout
+  const { stdout } = await execFileAsync(ytDlp, [
     url,
     '-x',
     '--audio-format',
@@ -62,10 +67,24 @@ export async function downloadYoutube(url: string, title: string): Promise<strin
     '0',
     '-o',
     outputTemplate,
+    '--print',
+    'after_move:filepath',
+    '--no-simulate',
     '--no-warnings',
   ])
 
-  return outputDir
+  const filePath = stdout.trim().split('\n').filter(Boolean).pop()
+  if (!filePath || !existsSync(filePath)) {
+    throw new Error('yt-dlp finished but no output file was reported')
+  }
+
+  return insertSong({
+    title: title || filePath.split('/').pop()!.replace(/\.mp3$/i, ''),
+    artist: 'YouTube',
+    duration: 0,
+    source: 'youtube',
+    audioPath: filePath,
+  })
 }
 
 export function registerProviderHandlers(ipcMain: IpcMain): void {

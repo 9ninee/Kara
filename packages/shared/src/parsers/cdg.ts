@@ -136,8 +136,10 @@ export class CDGPlayer {
   private tileBlock(d: Uint8Array, xor: boolean): void {
     const color0 = d[0] & 0x0f
     const color1 = d[1] & 0x0f
-    const row = (d[2] & 0x1f) * 12
-    const col = (d[3] & 0x3f) * 6
+    // Tile coordinates address the full 300×216 CDG screen where row 0 /
+    // col 0 form the border; the visible 288×192 window starts at (6,12).
+    const row = (d[2] & 0x1f) * 12 - 12
+    const col = (d[3] & 0x3f) * 6 - 6
 
     for (let r = 0; r < 12; r++) {
       const byte = d[4 + r]
@@ -145,7 +147,7 @@ export class CDGPlayer {
         const bit = (byte >> (5 - c)) & 0x01
         const x = col + c
         const y = row + r
-        if (x >= CDG_WIDTH || y >= CDG_HEIGHT) continue
+        if (x < 0 || y < 0 || x >= CDG_WIDTH || y >= CDG_HEIGHT) continue
         const pixIdx = y * CDG_WIDTH + x
         if (xor) {
           this.colorIndex[pixIdx] ^= bit ? color1 : color0
@@ -157,11 +159,12 @@ export class CDGPlayer {
   }
 
   private scroll(d: Uint8Array, copy: boolean): void {
+    // Scroll Preset fills the vacated area with the color in data byte 0
+    // (per CDG spec), NOT the border color. Scroll Copy wraps instead.
+    const fillColor = d[0] & 0x0f
     const hScroll = d[1] & 0x3f
     const vScroll = d[2] & 0x3f
-    const hOffset = hScroll & 0x07
     const hCmd = (hScroll >> 4) & 0x03
-    const vOffset = vScroll & 0x0f
     const vCmd = (vScroll >> 4) & 0x03
 
     const dx = hCmd === 2 ? -6 : hCmd === 1 ? 6 : 0
@@ -170,7 +173,7 @@ export class CDGPlayer {
     if (dx === 0 && dy === 0) return
 
     const old = new Uint8Array(this.colorIndex)
-    const fill = copy ? 0 : this.borderColorIndex
+    const fill = fillColor
 
     for (let y = 0; y < CDG_HEIGHT; y++) {
       for (let x = 0; x < CDG_WIDTH; x++) {

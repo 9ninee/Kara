@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import DevicePicker from '../components/DevicePicker'
-import { useAudioPlayer } from '../hooks/useAudioPlayer'
+import { useAppContext } from '../context/AppContext'
 
 export default function Settings(): React.ReactElement {
-  const player = useAudioPlayer()
+  // Shared audio pipeline — device/mic changes here affect actual playback
+  const { player, currentSong } = useAppContext()
   const [outputDevice, setOutputDevice] = useState('')
   const [inputDevice, setInputDevice] = useState('')
 
@@ -72,9 +73,13 @@ export default function Settings(): React.ReactElement {
 
   const castTo = async (device: NonNullable<typeof castDevice>) => {
     if (!device) return
+    if (!currentSong) {
+      setCastStatus('Play a song first, then cast it.')
+      return
+    }
     setCastStatus(`Connecting to ${device.name}…`)
     try {
-      const result = await window.api.castToChromecast(device, '')
+      const result = await window.api.castToChromecast(device, currentSong.audioPath)
       if (result.success) {
         setCastConnected(true)
         setCastDevice(device)

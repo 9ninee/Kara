@@ -35,6 +35,17 @@ export default function Queue(): React.ReactElement {
     const unsub = window.api.on('queue:updated', (q) => {
       setQueue(q as QueueState)
     })
+    // Restore party state after tab switches (this component unmounts)
+    window.api.getPartyStatus()
+      .then((s) => {
+        if (s.active) {
+          setPartyActive(true)
+          setSessionId(s.sessionId)
+          setQrDataUrl(s.qrDataUrl || null)
+          if (s.queue) setQueue(s.queue)
+        }
+      })
+      .catch((err: unknown) => console.warn('[Queue] getPartyStatus failed', err))
     return () => { unsub() }
   }, [])
 
@@ -99,7 +110,7 @@ export default function Queue(): React.ReactElement {
               </div>
               {queue.history.map((h) => (
                 <div key={h.queueItemId} style={{ fontSize: 13, color: '#444', padding: '4px 0', borderBottom: '1px solid #111' }}>
-                  {h.songId}
+                  {h.title ? `${h.title}${h.artist ? ` — ${h.artist}` : ''}` : h.songId}
                 </div>
               ))}
             </div>

@@ -1,48 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { CDGPlayer, parseLRC } from '@kara/shared'
-import type { LyricsLine } from '@kara/shared'
+import React from 'react'
 import { CDGDisplay, LRCDisplay } from '../components/LyricsDisplay'
-import { useAudioPlayer } from '../hooks/useAudioPlayer'
 import { useAppContext } from '../context/AppContext'
 
 export default function Player(): React.ReactElement {
-  const { currentSong } = useAppContext()
-  const player = useAudioPlayer()
-  const [cdgPlayer, setCdgPlayer] = useState<CDGPlayer | null>(null)
-  const [lrcLines, setLrcLines] = useState<LyricsLine[]>([])
-  const [loading, setLoading] = useState(false)
-
-  const loadCurrentSong = useCallback(async () => {
-    if (!currentSong) return
-    setLoading(true)
-    try {
-      const audioUrl = window.api.getLocalFileUrl(currentSong.audioPath)
-      await player.loadTrack(audioUrl)
-
-      if (currentSong.cdgPath) {
-        const cdgUrl = window.api.getLocalFileUrl(currentSong.cdgPath)
-        const resp = await fetch(cdgUrl)
-        const buf = await resp.arrayBuffer()
-        setCdgPlayer(new CDGPlayer(buf))
-        setLrcLines([])
-      } else if (currentSong.lrcPath) {
-        setCdgPlayer(null)
-        const lrcUrl = window.api.getLocalFileUrl(currentSong.lrcPath)
-        const resp = await fetch(lrcUrl)
-        const text = await resp.text()
-        setLrcLines(parseLRC(text))
-      } else {
-        setCdgPlayer(null)
-        setLrcLines([])
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [currentSong, player])
-
-  useEffect(() => {
-    loadCurrentSong()
-  }, [currentSong]) // eslint-disable-line react-hooks/exhaustive-deps
+  const { currentSong, player, cdgPlayer, lrcLines, songLoading: loading } = useAppContext()
 
   const { currentTimeMs, durationMs, isPlaying, volume, micVolume } = player.state
 

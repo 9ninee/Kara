@@ -1,4 +1,4 @@
-import type { LyricsLine } from '../types/song.js'
+import type { LyricsLine } from '../types/song'
 
 const TIMESTAMP_RE = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g
 

@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain, shell, protocol, net, dialog } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import { initDatabase } from './library/database'
-import { startPartyServer, stopPartyServer } from './server/partyServer'
+import { initDatabase, incrementPlayCount } from './library/database'
+import { startPartyServer, stopPartyServer, advancePartyQueue, getPartyStatus } from './server/partyServer'
 import { startMediaServer, stopMediaServer } from './server/mediaServer'
 import { registerAudioHandlers } from './audio/deviceManager'
 import { registerLibraryHandlers } from './library/database'
@@ -49,7 +49,10 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   protocol.handle('kara', (request) => {
-    const filePath = request.url.slice('kara://local'.length)
+    // Path segments are URI-encoded by the preload so filenames containing
+    // '#' or '?' survive URL parsing — decode them back here.
+    const encoded = new URL(request.url).pathname
+    const filePath = encoded.split('/').map(decodeURIComponent).join('/')
     return net.fetch(`file://${filePath}`)
   })
 
@@ -67,15 +70,31 @@ app.whenReady().then(async () => {
   )
 
   ipcMain.handle('party:start', async () => {
-    const result = await startPartyServer((queue) => {
-      mainWindow?.webContents.send('queue:updated', queue)
-    })
+    const result = await startPartyServer(
+      (queue) => {
+        mainWindow?.webContents.send('queue:updated', queue)
+      },
+      (nowPlaying) => {
+        // Drive the host player: the renderer loads and plays this song
+        mainWindow?.webContents.send('party:play-song', nowPlaying.song)
+      },
+    )
     return result
   })
 
   ipcMain.handle('party:stop', async () => {
     await stopPartyServer()
     mainWindow?.webContents.send('queue:updated', { items: [], nowPlaying: null, history: [] })
+  })
+
+  ipcMain.handle('party:next', () => {
+    advancePartyQueue()
+  })
+
+  ipcMain.handle('party:status', () => getPartyStatus())
+
+  ipcMain.handle('library:song-played', (_e, songId: string) => {
+    incrementPlayCount(songId)
   })
 
   createWindow()

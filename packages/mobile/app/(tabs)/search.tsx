@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -6,24 +6,48 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
+  Alert,
 } from 'react-native'
 import * as DocumentPicker from 'expo-document-picker'
 import { useLibrary } from '../../hooks/useLibrary'
 import { useAppContext } from '../../context/AppContext'
+import { useParty } from '../../context/PartyContext'
+import type { HostSong } from '../../context/PartyContext'
 import type { Song } from '@kara/shared'
 
 export default function LibraryScreen() {
   const { songs, addSongs, removeSong } = useLibrary()
   const { playSong, playerState } = useAppContext()
+  const { connected, fetchHostLibrary, addToQueue } = useParty()
   const [query, setQuery] = useState('')
+  const [tab, setTab] = useState<'local' | 'party'>('local')
+  const [hostSongs, setHostSongs] = useState<HostSong[]>([])
 
+  // Load the host's library whenever the party tab is opened
+  useEffect(() => {
+    if (tab !== 'party' || !connected) return
+    fetchHostLibrary()
+      .then(setHostSongs)
+      .catch((e: unknown) => Alert.alert('Could not load host library', String(e)))
+  }, [tab, connected, fetchHostLibrary])
+
+  useEffect(() => {
+    if (!connected) setTab('local')
+  }, [connected])
+
+  const activeSongs = tab === 'party' ? hostSongs : songs
   const filtered = query.trim()
-    ? songs.filter(
+    ? activeSongs.filter(
         (s) =>
           s.title.toLowerCase().includes(query.toLowerCase()) ||
           s.artist.toLowerCase().includes(query.toLowerCase()),
       )
-    : songs
+    : activeSongs
+
+  const requestSong = (song: HostSong) => {
+    addToQueue(song)
+    Alert.alert('Added to queue', `"${song.title}" was added to the party queue.`)
+  }
 
   const handleImport = async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -38,11 +62,12 @@ export default function LibraryScreen() {
 
   const renderSong = ({ item }: { item: Song }) => {
     const isActive = playerState.song?.id === item.id
+    const isParty = tab === 'party'
     return (
       <TouchableOpacity
         style={[styles.songRow, isActive && styles.songRowActive]}
-        onPress={() => playSong(item)}
-        onLongPress={() => removeSong(item.id)}
+        onPress={() => (isParty ? requestSong(item as HostSong) : playSong(item))}
+        onLongPress={() => { if (!isParty) removeSong(item.id) }}
       >
         <View style={styles.songInfo}>
           <Text style={[styles.songTitle, isActive && styles.songTitleActive]} numberOfLines={1}>
@@ -57,24 +82,48 @@ export default function LibraryScreen() {
             <Text style={styles.badgeText}>LRC</Text>
           </View>
         )}
+        {isParty && (
+          <View style={[styles.badge, { backgroundColor: '#2a0a14' }]}>
+            <Text style={[styles.badgeText, { color: '#ee0055' }]}>+ QUEUE</Text>
+          </View>
+        )}
       </TouchableOpacity>
     )
   }
 
   return (
     <View style={styles.container}>
+      {connected && (
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.tabBtn, tab === 'local' && styles.tabBtnActive]}
+            onPress={() => setTab('local')}
+          >
+            <Text style={[styles.tabText, tab === 'local' && styles.tabTextActive]}>My Songs</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, tab === 'party' && styles.tabBtnActive]}
+            onPress={() => setTab('party')}
+          >
+            <Text style={[styles.tabText, tab === 'party' && styles.tabTextActive]}>Party Library</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.toolbar}>
         <TextInput
           style={styles.input}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search library…"
+          placeholder={tab === 'party' ? 'Search host library…' : 'Search library…'}
           placeholderTextColor="#555"
           clearButtonMode="while-editing"
         />
-        <TouchableOpacity style={styles.importBtn} onPress={handleImport}>
-          <Text style={styles.importBtnText}>+ Import</Text>
-        </TouchableOpacity>
+        {tab === 'local' && (
+          <TouchableOpacity style={styles.importBtn} onPress={handleImport}>
+            <Text style={styles.importBtnText}>+ Import</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <FlatList
@@ -83,10 +132,11 @@ export default function LibraryScreen() {
         renderItem={renderSong}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>No songs yet</Text>
+            <Text style={styles.emptyTitle}>{tab === 'party' ? 'Host library is empty' : 'No songs yet'}</Text>
             <Text style={styles.emptyHint}>
-              Tap "+ Import" to add MP3 files from your device.{'\n'}
-              Long-press a song to remove it.
+              {tab === 'party'
+                ? 'Tap a song to add it to the party queue once the host imports music.'
+                : 'Tap "+ Import" to add MP3 files from your device.\nLong-press a song to remove it.'}
             </Text>
           </View>
         }
@@ -97,6 +147,11 @@ export default function LibraryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0a' },
+  tabRow: { flexDirection: 'row', paddingHorizontal: 12, paddingTop: 10, gap: 8 },
+  tabBtn: { flex: 1, backgroundColor: '#1a1a1a', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  tabBtnActive: { backgroundColor: '#ee0055' },
+  tabText: { color: '#888', fontWeight: '600', fontSize: 13 },
+  tabTextActive: { color: '#fff' },
   toolbar: {
     flexDirection: 'row',
     padding: 12,

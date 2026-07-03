@@ -1,4 +1,4 @@
-import type { Song } from './song.js'
+import type { Song } from './song'
 
 export interface QueueItem {
   id: string
@@ -19,8 +19,16 @@ export interface NowPlaying {
   isPlaying: boolean
 }
 
+export interface HistoryEntry {
+  queueItemId: string
+  songId: string
+  playedAt: number
+  title?: string
+  artist?: string
+}
+
 export interface QueueState {
   items: QueueItem[]
   nowPlaying: NowPlaying | null
-  history: Array<{ queueItemId: string; songId: string; playedAt: number }>
+  history: HistoryEntry[]
 }

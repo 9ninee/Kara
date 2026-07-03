@@ -1,9 +1,14 @@
 import React from 'react'
 import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native'
-import { useParty } from '../../hooks/useParty'
+import { useParty } from '../../context/PartyContext'
+
+function formatMs(ms: number): string {
+  const s = Math.floor(ms / 1000)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
 
 export default function QueueScreen() {
-  const { session, connected, connect, disconnect } = useParty()
+  const { session, connected, disconnect, voteSkip, positionMs } = useParty()
   const queue = session?.queue
 
   return (
@@ -24,6 +29,11 @@ export default function QueueScreen() {
           <Text style={styles.nowPlayingLabel}>NOW PLAYING</Text>
           <Text style={styles.nowPlayingTitle}>{queue.nowPlaying.song.title}</Text>
           <Text style={styles.nowPlayingArtist}>{queue.nowPlaying.song.artist}</Text>
+          <Text style={styles.nowPlayingTime}>
+            {formatMs(positionMs)}
+            {queue.nowPlaying.song.duration > 0 &&
+              ` / ${formatMs(queue.nowPlaying.song.duration * 1000)}`}
+          </Text>
         </View>
       )}
 
@@ -42,11 +52,14 @@ export default function QueueScreen() {
             {item.skipVotes.length > 0 && (
               <Text style={styles.skipBadge}>{item.skipVotes.length} skip</Text>
             )}
+            <TouchableOpacity style={styles.voteBtn} onPress={() => voteSkip(item.id)}>
+              <Text style={styles.voteBtnText}>Skip</Text>
+            </TouchableOpacity>
           </View>
         )}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
-            {connected ? 'Queue is empty' : 'Join a party to see the queue'}
+            {connected ? 'Queue is empty — add songs from the Library tab' : 'Join a party to see the queue'}
           </Text>
         }
       />
@@ -65,11 +78,14 @@ const styles = StyleSheet.create({
   nowPlayingLabel: { color: '#ee0055', fontSize: 11, fontWeight: '700', marginBottom: 4 },
   nowPlayingTitle: { color: '#fff', fontWeight: '700', fontSize: 17 },
   nowPlayingArtist: { color: '#888', fontSize: 14, marginTop: 2 },
+  nowPlayingTime: { color: '#4af', fontSize: 12, marginTop: 6, fontVariant: ['tabular-nums'] },
   queueItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a1a1a', gap: 12 },
   queueIdx: { color: '#555', width: 20, textAlign: 'right' },
   queueInfo: { flex: 1 },
   queueTitle: { color: '#fff', fontWeight: '600', fontSize: 15 },
   queueSub: { color: '#666', fontSize: 12, marginTop: 2 },
   skipBadge: { color: '#fa0', fontSize: 12 },
+  voteBtn: { backgroundColor: '#222', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
+  voteBtnText: { color: '#fa0', fontSize: 12, fontWeight: '600' },
   emptyText: { color: '#555', padding: 32, textAlign: 'center', fontSize: 15 },
 })

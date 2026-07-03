@@ -23,7 +23,7 @@ declare global {
         properties?: string[]
       }) => Promise<{ canceled: boolean; filePaths: string[] }>
       searchYoutube: (q: string) => Promise<YoutubeResult[]>
-      downloadYoutube: (url: string, title: string) => Promise<string>
+      downloadYoutube: (url: string, title: string) => Promise<Song>
       setOutputDevice: (id: string) => Promise<unknown>
       setInputDevice: (id: string) => Promise<unknown>
       discoverChromecast: () => Promise<ChromecastDeviceInfo[]>
@@ -35,6 +35,15 @@ declare global {
       getCastStatus: () => Promise<{ connected: boolean; device: ChromecastDeviceInfo | null }>
       startParty: () => Promise<{ sessionId: string; port: number; qrDataUrl: string }>
       stopParty: () => Promise<void>
+      partyNext: () => Promise<void>
+      getPartyStatus: () => Promise<{
+        active: boolean
+        sessionId: string | null
+        port: number
+        qrDataUrl: string
+        queue: import('@kara/shared').QueueState | null
+      }>
+      songPlayed: (songId: string) => Promise<void>
       on: (channel: string, cb: (...args: unknown[]) => void) => () => void
       configureKaraokeApi: (baseUrl: string, apiKey: string, name: string) => Promise<{ success: boolean }>
       getKaraokeApiStatus: () => Promise<{ configured: boolean; name: string | null }>

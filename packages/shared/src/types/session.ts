@@ -1,5 +1,5 @@
-import type { QueueState, QueueItem, NowPlaying } from './queue.js'
-import type { Song } from './song.js'
+import type { QueueState, QueueItem, NowPlaying } from './queue'
+import type { Song } from './song'
 
 export interface Participant {
   id: string
@@ -30,6 +30,8 @@ export interface ServerToClientEvents {
   'playback:resumed': (positionMs: number) => void
   'playback:ended': () => void
   'playback:seeked': (positionMs: number) => void
+  /** 1 Hz position sync — informational only, never a hard seek */
+  'playback:tick': (positionMs: number) => void
   error: (message: string) => void
 }
 

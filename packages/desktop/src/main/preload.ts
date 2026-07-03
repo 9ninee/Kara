@@ -3,7 +3,11 @@ import { electronAPI } from '@electron-toolkit/preload'
 
 function getLocalFileUrl(absPath: string): string {
   const normalized = absPath.replace(/\\/g, '/')
-  return `kara://local${normalized.startsWith('/') ? normalized : '/' + normalized}`
+  const rooted = normalized.startsWith('/') ? normalized : '/' + normalized
+  // Encode each segment so '#'/'?' in filenames survive URL parsing;
+  // the main-process protocol handler decodes them back.
+  const encoded = rooted.split('/').map(encodeURIComponent).join('/')
+  return `kara://local${encoded}`
 }
 
 const api = {
@@ -50,6 +54,11 @@ const api = {
   // Party mode
   startParty: () => ipcRenderer.invoke('party:start') as Promise<{ sessionId: string; port: number; qrDataUrl: string }>,
   stopParty: () => ipcRenderer.invoke('party:stop'),
+  partyNext: () => ipcRenderer.invoke('party:next'),
+  getPartyStatus: () => ipcRenderer.invoke('party:status'),
+
+  // Library stats
+  songPlayed: (songId: string) => ipcRenderer.invoke('library:song-played', songId),
 
   // IPC event listeners (main → renderer push events)
   on: (channel: string, callback: (...args: unknown[]) => void) => {

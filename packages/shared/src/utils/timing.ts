@@ -1,4 +1,4 @@
-import type { LyricsLine } from '../types/song.js'
+import type { LyricsLine } from '../types/song'
 
 /**
  * Binary search for the current lyrics line given playback position.
