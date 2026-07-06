@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react'
-import { Audio, AVPlaybackStatus } from 'expo-av'
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio'
 import { parseLRC } from '@kara/shared'
 import type { Song, LyricsLine } from '@kara/shared'
 
@@ -46,43 +46,49 @@ const AppContext = createContext<AppContextValue>({
 })
 
 export function AppProvider({ children }: { children: React.ReactNode }): React.ReactElement {
-  const soundRef = useRef<Audio.Sound | null>(null)
-  const musicVolumeRef = useRef(1)
+  const player = useAudioPlayer(null)
+  const status = useAudioPlayerStatus(player)
   const [state, setState] = useState<PlayerState>(defaultState)
+  const finishedRef = useRef(false)
 
-  const onStatus = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return
-    if (status.didJustFinish) {
-      // Song ended: rewind to the start so Play restarts cleanly
-      soundRef.current?.setPositionAsync(0).catch(() => undefined)
+  useEffect(() => {
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      allowsRecording: true,
+      shouldPlayInBackground: true,
+    }).catch(() => undefined)
+  }, [])
+
+  // Mirror the player's status into our state. expo-audio does not rewind
+  // automatically when a song finishes — seek back so Play restarts cleanly.
+  useEffect(() => {
+    if (status.didJustFinish && !finishedRef.current) {
+      finishedRef.current = true
+      // pause BEFORE rewinding — on Android the player may still have
+      // playWhenReady set, and a bare seekTo(0) would loop the song forever
+      player.pause()
+      player.seekTo(0).catch(() => undefined)
       setState((s) => ({ ...s, isPlaying: false, currentTimeMs: 0 }))
       return
     }
+    if (!status.didJustFinish) finishedRef.current = false
     setState((s) => ({
       ...s,
-      isPlaying: status.isPlaying,
-      currentTimeMs: status.positionMillis,
-      durationMs: status.durationMillis ?? 0,
+      isPlaying: status.playing,
+      currentTimeMs: Math.round((status.currentTime ?? 0) * 1000),
+      durationMs: Math.round((status.duration ?? 0) * 1000),
     }))
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status.playing, status.currentTime, status.duration, status.didJustFinish])
 
   const playSong = useCallback(
     async (song: Song) => {
       setState((s) => ({ ...s, loading: true, song }))
       try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-        })
-        if (soundRef.current) await soundRef.current.unloadAsync()
-
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: song.audioPath },
-          { shouldPlay: false, volume: musicVolumeRef.current },
-          onStatus,
-        )
-        soundRef.current = sound
+        // replace() keeps the previous playing state — pause first so a new
+        // song always loads stopped and the user presses Play deliberately
+        player.pause()
+        player.replace({ uri: song.audioPath })
 
         let lrcLines: LyricsLine[] = []
         if (song.lrcPath) {
@@ -101,32 +107,34 @@ export function AppProvider({ children }: { children: React.ReactNode }): React.
         }))
       } catch (err: unknown) {
         console.warn('[AppContext] playSong failed', err)
-        // Reset fully — a half-loaded song would leave Play pointing at the
-        // previous (already unloaded) sound
-        soundRef.current = null
         setState((s) => ({ ...s, song: null, loading: false, isPlaying: false, lrcLines: [] }))
       }
     },
-    [onStatus],
+    [player],
   )
 
   const play = useCallback(async () => {
-    await soundRef.current?.playAsync()
-  }, [])
+    player.play()
+  }, [player])
 
   const pause = useCallback(async () => {
-    await soundRef.current?.pauseAsync()
-  }, [])
+    player.pause()
+  }, [player])
 
-  const seek = useCallback(async (ms: number) => {
-    await soundRef.current?.setPositionAsync(ms)
-  }, [])
+  const seek = useCallback(
+    async (ms: number) => {
+      await player.seekTo(ms / 1000).catch(() => undefined)
+    },
+    [player],
+  )
 
-  const setMusicVolume = useCallback((v: number) => {
-    musicVolumeRef.current = v
-    soundRef.current?.setVolumeAsync(v)
-    setState((s) => ({ ...s, musicVolume: v }))
-  }, [])
+  const setMusicVolume = useCallback(
+    (v: number) => {
+      player.volume = v
+      setState((s) => ({ ...s, musicVolume: v }))
+    },
+    [player],
+  )
 
   const setMicVolume = useCallback((v: number) => {
     setState((s) => ({ ...s, micVolume: v }))

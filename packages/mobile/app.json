@@ -7,6 +7,7 @@
     "icon": "./assets/icon.png",
     "scheme": "kara",
     "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#0a0a0a"
@@ -27,14 +28,21 @@
     "plugins": [
       "expo-router",
       [
-        "expo-av",
+        "expo-audio",
         {
           "microphonePermission": "Allow Kara to access your microphone."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Kara uses the camera to scan QR codes to join a party session."
         }
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "tsconfigPaths": false
     }
   }
 }

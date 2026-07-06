@@ -1,6 +1,6 @@
 import React from 'react'
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native'
-import { Audio } from 'expo-av'
+import { setAudioModeAsync } from 'expo-audio'
 
 // react-native-google-cast may not be available in all builds — import lazily
 let CastButton: React.ComponentType<{ style?: object; tintColor?: string }> | null = null
@@ -20,10 +20,10 @@ export function CastingButton({ style }: CastingButtonProps): React.ReactElement
     if (Platform.OS !== 'ios') return
     try {
       // Set audio mode so AirPlay routes are available
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
       })
       // On iOS, the system AirPlay picker appears via AVRoutePickerView.
       // Without a native module wrapper we trigger the system media controls

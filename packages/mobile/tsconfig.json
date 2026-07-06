@@ -5,6 +5,12 @@
     "paths": {
       "@kara/shared": [
         "../shared/src/index.ts"
+      ],
+      "react": [
+        "./node_modules/@types/react"
+      ],
+      "react/jsx-runtime": [
+        "./node_modules/@types/react/jsx-runtime"
       ]
     }
   },

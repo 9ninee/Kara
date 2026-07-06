@@ -1,26 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { CameraView, useCameraPermissions } from 'expo-camera'
 
 interface QRJoinScannerProps {
   /** Called with (host, port) parsed from a kara://join QR code */
   onJoin: (host: string, port: string) => void
   onCancel: () => void
-}
-
-// expo-barcode-scanner needs a native module — absent in some environments
-// (web, bare simulators). Load lazily so the bundle never hard-crashes.
-let BarCodeScanner: React.ComponentType<{
-  onBarCodeScanned: (event: { data: string }) => void
-  style?: object
-}> | null = null
-let requestPermissions: (() => Promise<{ status: string }>) | null = null
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const mod = require('expo-barcode-scanner')
-  BarCodeScanner = mod.BarCodeScanner
-  requestPermissions = mod.BarCodeScanner.requestPermissionsAsync
-} catch {
-  // scanner unavailable — component renders a hint instead
 }
 
 function parseJoinUrl(data: string): { host: string; port: string } | null {
@@ -32,21 +17,17 @@ function parseJoinUrl(data: string): { host: string; port: string } | null {
 }
 
 export function QRJoinScanner({ onJoin, onCancel }: QRJoinScannerProps): React.ReactElement {
-  const [permission, setPermission] = useState<'pending' | 'granted' | 'denied'>('pending')
+  const [permission, requestPermission] = useCameraPermissions()
   const [scanned, setScanned] = useState(false)
 
   useEffect(() => {
-    if (!requestPermissions) {
-      setPermission('denied')
-      return
+    if (permission && !permission.granted && permission.canAskAgain) {
+      requestPermission().catch(() => undefined)
     }
-    requestPermissions()
-      .then(({ status }) => setPermission(status === 'granted' ? 'granted' : 'denied'))
-      .catch(() => setPermission('denied'))
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permission?.granted])
 
   const handleScan = ({ data }: { data: string }) => {
-    if (scanned) return
     const parsed = parseJoinUrl(data)
     if (parsed) {
       setScanned(true)
@@ -56,11 +37,16 @@ export function QRJoinScanner({ onJoin, onCancel }: QRJoinScannerProps): React.R
 
   return (
     <View style={styles.wrap}>
-      {BarCodeScanner && permission === 'granted' ? (
-        <BarCodeScanner onBarCodeScanned={handleScan} style={styles.scanner} />
+      {permission?.granted ? (
+        <CameraView
+          // pause scanning after the first successful parse
+          onBarcodeScanned={scanned ? undefined : handleScan}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          style={styles.scanner}
+        />
       ) : (
         <Text style={styles.hint}>
-          {permission === 'pending'
+          {!permission
             ? 'Requesting camera permission…'
             : 'Camera unavailable. Enter the host IP manually instead.'}
         </Text>
