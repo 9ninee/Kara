@@ -22,6 +22,8 @@ export default function LibraryScreen() {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<'local' | 'party'>('local')
   const [hostSongs, setHostSongs] = useState<HostSong[]>([])
+  const [urlMode, setUrlMode] = useState(false)
+  const [songUrl, setSongUrl] = useState('')
 
   // Load the host's library whenever the party tab is opened
   useEffect(() => {
@@ -58,6 +60,24 @@ export default function LibraryScreen() {
     if (!result.canceled && result.assets.length > 0) {
       await addSongs(result.assets.map((a) => ({ uri: a.uri, name: a.name })))
     }
+  }
+
+  const handleAddUrl = async () => {
+    const url = songUrl.trim()
+    if (!/^https?:\/\/.+/i.test(url)) {
+      Alert.alert('Invalid link', 'Paste a direct link to an audio file (http:// or https://).')
+      return
+    }
+    // derive a display name from the last path segment of the URL
+    let name = 'Song from link'
+    try {
+      const last = decodeURIComponent(url.split('?')[0].split('/').filter(Boolean).pop() ?? '')
+      if (last) name = last
+    } catch { /* keep default name */ }
+    const [added] = await addSongs([{ uri: url, name }])
+    setSongUrl('')
+    setUrlMode(false)
+    Alert.alert('Added to library', `"${added.title}" was added. Tap it to play.`)
   }
 
   const renderSong = ({ item }: { item: Song }) => {
@@ -120,11 +140,37 @@ export default function LibraryScreen() {
           clearButtonMode="while-editing"
         />
         {tab === 'local' && (
-          <TouchableOpacity style={styles.importBtn} onPress={handleImport}>
-            <Text style={styles.importBtnText}>+ Import</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity style={styles.importBtn} onPress={handleImport}>
+              <Text style={styles.importBtnText}>+ Import</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.importBtn, { backgroundColor: '#1a1a2a' }]}
+              onPress={() => setUrlMode((v) => !v)}
+            >
+              <Text style={[styles.importBtnText, { color: '#4af' }]}>+ URL</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
+
+      {tab === 'local' && urlMode && (
+        <View style={styles.urlRow}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            value={songUrl}
+            onChangeText={setSongUrl}
+            placeholder="https://example.com/song.mp3"
+            placeholderTextColor="#555"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          <TouchableOpacity style={styles.importBtn} onPress={handleAddUrl}>
+            <Text style={styles.importBtnText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <FlatList
         data={filtered}
@@ -136,7 +182,7 @@ export default function LibraryScreen() {
             <Text style={styles.emptyHint}>
               {tab === 'party'
                 ? 'Tap a song to add it to the party queue once the host imports music.'
-                : 'Tap "+ Import" to add MP3 files from your device.\nLong-press a song to remove it.'}
+                : 'Tap "+ Import" to add MP3 files from your device,\nor "+ URL" to add a song from a direct link.\nLong-press a song to remove it.'}
             </Text>
           </View>
         }
@@ -175,6 +221,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   importBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  urlRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
   songRow: {
     flexDirection: 'row',
     alignItems: 'center',

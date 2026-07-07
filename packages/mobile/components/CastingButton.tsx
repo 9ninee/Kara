@@ -1,14 +1,21 @@
 import React from 'react'
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native'
 import { setAudioModeAsync } from 'expo-audio'
+import Constants, { ExecutionEnvironment } from 'expo-constants'
 
-// react-native-google-cast may not be available in all builds — import lazily
+// react-native-google-cast needs a custom native build. In Expo Go the JS
+// module loads (so require() alone doesn't fail) but the native view is
+// missing and rendering it crashes with "View config not found for
+// RNGoogleCastButton" — detect Expo Go explicitly and skip it there.
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
 let CastButton: React.ComponentType<{ style?: object; tintColor?: string }> | null = null
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  CastButton = require('react-native-google-cast').CastButton
-} catch {
-  // Chromecast SDK not linked (simulator / web)
+if (!isExpoGo && Platform.OS !== 'web') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    CastButton = require('react-native-google-cast').CastButton
+  } catch {
+    // Chromecast SDK not linked (simulator / bare build without the pod)
+  }
 }
 
 interface CastingButtonProps {
