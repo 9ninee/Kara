@@ -12,6 +12,8 @@ export interface QueueItem {
 export interface NowPlaying {
   queueItemId: string
   song: Song
+  /** Name of the guest who requested this song (used for fair rotation) */
+  requestedBy?: string
   startedAt: number
   pausedAt?: number
   /** Current playback position in milliseconds, as of startedAt */

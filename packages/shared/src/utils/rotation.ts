@@ -10,8 +10,11 @@ import type { QueueItem } from '../types/queue'
  * and plays after each existing singer's current song — instead of
  * waiting behind one enthusiastic guest's entire backlog.
  */
-export function computeFairOrder(items: QueueItem[]): QueueItem[] {
+export function computeFairOrder(items: QueueItem[], nowPlayingSinger?: string): QueueItem[] {
   const roundBySinger = new Map<string, number>()
+  // The singer currently on the mic has already used this round — their
+  // next pending song belongs to round 1, behind everyone's first song.
+  if (nowPlayingSinger) roundBySinger.set(nowPlayingSinger, 1)
   const decorated = items.map((item, index) => {
     const singer = item.requestedBy
     const round = roundBySinger.get(singer) ?? 0

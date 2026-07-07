@@ -47,6 +47,18 @@ describe('computeFairOrder', () => {
     expect(computeFairOrder([])).toEqual([])
   })
 
+  it('counts the now-playing singer as having used the current round', () => {
+    // A is singing right now; A queued another song, then B queued their first.
+    // B's first song must play before A's second.
+    const items = [item('A'), item('B')]
+    expect(computeFairOrder(items, 'A').map((i) => i.requestedBy)).toEqual(['B', 'A'])
+  })
+
+  it('ignores nowPlayingSinger who has no pending songs', () => {
+    const items = [item('A'), item('B')]
+    expect(computeFairOrder(items, 'C').map((i) => i.requestedBy)).toEqual(['A', 'B'])
+  })
+
   it('does not mutate the input array', () => {
     const items = [item('A'), item('A'), item('B')]
     const snapshot = [...items]

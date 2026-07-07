@@ -58,6 +58,7 @@ function advanceQueue(): void {
     const nowPlaying: NowPlaying = {
       queueItemId: next.id,
       song: next.song,
+      requestedBy: next.requestedBy,
       startedAt: Date.now(),
       positionMs: 0,
       isPlaying: true,
@@ -166,8 +167,13 @@ export async function startPartyServer(
         addedAt: Date.now(),
         skipVotes: [],
       })
-      // Fair-play rotation: interleave singers round-robin so nobody dominates
-      session.queue.items = computeFairOrder(session.queue.items)
+      // Fair-play rotation: interleave singers round-robin so nobody dominates.
+      // The current singer's pending songs count as round 1+ — their song on
+      // the mic already used this round.
+      session.queue.items = computeFairOrder(
+        session.queue.items,
+        session.queue.nowPlaying?.requestedBy,
+      )
       if (!session.queue.nowPlaying) advanceQueue()
       broadcastQueue()
     })
